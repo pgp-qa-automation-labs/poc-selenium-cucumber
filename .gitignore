@@ -1,0 +1,12 @@
+# Maven
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+out/
+
+# Logs y secretos locales
+*.log
+.env

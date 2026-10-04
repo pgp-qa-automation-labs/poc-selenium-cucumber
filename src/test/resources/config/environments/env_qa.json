@@ -1,0 +1,10 @@
+{
+  "app": {
+    "baseUrl": "https://guzman-corretaje.vercel.app/",
+    "apiUrl": "https://guzman-corretaje-api.onrender.com"
+  },
+  "warmUp": {
+    "enabled": true,
+    "maxSeconds": 180
+  }
+}

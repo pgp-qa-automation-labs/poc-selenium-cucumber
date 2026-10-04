@@ -1,0 +1,39 @@
+name: E2E Selenium Cucumber
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: Ambiente
+        type: choice
+        options: [qa, prod]
+        default: qa
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # CI=true lo define GitHub Actions: config.js fuerza headless automáticamente
+      - name: Ejecutar pruebas
+        run: mvn -B test -Denv=${{ inputs.env || 'qa' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # se usará en la fase de Self-healing
+
+      - name: Publicar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-report
+          path: target/cucumber-reports/
