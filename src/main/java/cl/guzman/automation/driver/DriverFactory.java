@@ -29,16 +29,19 @@ public final class DriverFactory {
         };
 
         driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(config.timeouts().pageLoadSeconds()));
+        if (!browser.headless()) {
+            driver.manage().window().maximize();
+        }
         return driver;
     }
 
     private static <T extends ChromiumOptions<T>> T configure(T options, EnvironmentConfig.Browser browser) {
-        options.addArguments(
-                "--window-size=" + browser.windowWidth() + "," + browser.windowHeight(),
-                "--disable-notifications",
-                "--lang=es-CL");
+        options.addArguments("--disable-notifications", "--lang=es-CL");
         if (browser.headless()) {
-            options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage");
+            // Sin pantalla no se puede maximizar: se fija un tamaño para que el layout sea estable en CI
+            options.addArguments(
+                    "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+                    "--window-size=" + browser.windowWidth() + "," + browser.windowHeight());
         }
         return options;
     }
