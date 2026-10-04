@@ -1,0 +1,22 @@
+{
+  "app": {
+    "baseUrl": "",
+    "apiUrl": ""
+  },
+  "browser": {
+    "name": "chrome",
+    "headless": false,
+    "windowWidth": 1920,
+    "windowHeight": 1080
+  },
+  "timeouts": {
+    "explicitWaitSeconds": 10,
+    "pageLoadSeconds": 30
+  },
+  "warmUp": {
+    "enabled": false,
+    "maxSeconds": 0,
+    "pollSeconds": 5,
+    "healthPath": "/api/hora"
+  }
+}

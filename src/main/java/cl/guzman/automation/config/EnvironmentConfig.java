@@ -1,7 +1,7 @@
 package cl.guzman.automation.config;
 
 /**
- * Configuración final de la ejecución, resultado de evaluar config.js sobre env_&lt;ambiente&gt;.json.
+ * Configuración final de la ejecución, resultado de combinar config.json con env_&lt;ambiente&gt;.json (ver ConfigReader).
  */
 public record EnvironmentConfig(
         String env,

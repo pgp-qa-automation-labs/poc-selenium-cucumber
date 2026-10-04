@@ -25,7 +25,7 @@ jobs:
           java-version: '17'
           cache: maven
 
-      # CI=true lo define GitHub Actions: config.js fuerza headless automáticamente
+      # CI=true lo define GitHub Actions: ConfigReader fuerza headless automáticamente
       - name: Ejecutar pruebas
         run: mvn -B test -Denv=${{ inputs.env || 'qa' }}
         env:

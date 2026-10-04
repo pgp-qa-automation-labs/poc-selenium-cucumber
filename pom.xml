@@ -21,7 +21,6 @@
         <selenium.version>4.50.0</selenium.version>
         <cucumber.version>7.34.9</cucumber.version>
         <testng.version>7.12.0</testng.version>
-        <graaljs.version>23.1.12</graaljs.version>
         <jackson.version>2.22.3</jackson.version>
         <assertj.version>3.27.7</assertj.version>
         <slf4j.version>2.0.17</slf4j.version>
@@ -36,18 +35,6 @@
             <groupId>org.seleniumhq.selenium</groupId>
             <artifactId>selenium-java</artifactId>
             <version>${selenium.version}</version>
-        </dependency>
-        <!-- Motor JavaScript para config.js. La línea 23.1.x es la última compatible con Java 17 -->
-        <dependency>
-            <groupId>org.graalvm.polyglot</groupId>
-            <artifactId>polyglot</artifactId>
-            <version>${graaljs.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.graalvm.polyglot</groupId>
-            <artifactId>js-community</artifactId>
-            <version>${graaljs.version}</version>
-            <type>pom</type>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

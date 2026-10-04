@@ -23,15 +23,16 @@ Reporte HTML: `target/cucumber-reports/cucumber.html` (incluye screenshot cuando
 
 ```
 src/test/resources/config/
-├── config.js                 → lógica: defaults, reglas por contexto, overrides y validaciones
+├── config.json               → defaults comunes a todos los ambientes
 └── environments/
     ├── env_dev.json          → datos de localhost
     ├── env_qa.json           → datos de QA (preproductivo)
     └── env_prod.json         → datos de producción
 ```
 
-- `config.js` es el **único lugar con lógica**; los JSON contienen **solo datos** y únicamente lo que cambia respecto de los defaults.
-- Precedencia (el último gana): defaults de `config.js` → `env_<env>.json` → reglas por contexto (`CI=true` fuerza headless) → `-Dseccion.clave=valor`.
+- Los JSON contienen **solo datos**; cada `env_<env>.json` declara únicamente lo que cambia respecto de `config.json`.
+- Toda la lógica (mezcla, reglas, overrides y validaciones) está en `ConfigReader.java`.
+- Precedencia (el último gana): `config.json` → `env_<env>.json` → reglas por contexto (`CI=true` fuerza headless) → `-Dseccion.clave=valor`.
 - Los secretos (ej. `ANTHROPIC_API_KEY`) se leen **solo desde variables de entorno**, nunca desde los JSON.
 - **Warm-up:** QA usa Render free, que se duerme por inactividad. Antes de abrir el navegador se consulta `apiUrl + /api/hora` hasta que responda (máximo `warmUp.maxSeconds`), para que las esperas de la UI se mantengan cortas.
 
@@ -39,7 +40,7 @@ src/test/resources/config/
 
 ```
 src/main/java/cl/guzman/automation/
-├── config/        ConfigReader (GraalJS) y EnvironmentConfig
+├── config/        ConfigReader y EnvironmentConfig
 ├── driver/        DriverFactory y DriverManager (ThreadLocal)
 ├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage
 ├── components/    TarjetaPropiedad
