@@ -32,7 +32,12 @@ public record EnvironmentConfig(
     public record WarmUp(boolean enabled, int maxSeconds, int pollSeconds, String healthPath) {
     }
 
-    public record Healing(boolean enabled, String model, int minConfidence, int maxDomChars, int requestTimeoutSeconds) {
+    /**
+     * @param patchSources si es true, al terminar la ejecución se corrigen en el código los locators reparados
+     *                     (lo activa el pipeline para luego abrir un PR; en local queda en false)
+     */
+    public record Healing(boolean enabled, String model, int minConfidence, int maxDomChars, int requestTimeoutSeconds,
+                          boolean patchSources) {
     }
 
     public record Secrets(String anthropicApiKey) {

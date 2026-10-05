@@ -11,32 +11,188 @@ on:
         type: choice
         options: [qa, prod]
         default: qa
+  # Ejecución diaria (lunes a viernes, 08:00 hora de Chile) para detectar cambios del front aunque nadie haga push
+  schedule:
+    - cron: '0 11 * * 1-5'
+
+permissions:
+  contents: read
+
+# Si llega un push nuevo a la misma rama, cancela la ejecución anterior
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TEST_ENV: ${{ inputs.env || 'qa' }}
+  PR_BRANCH: self-healing/correccion-locators
 
 jobs:
-  e2e:
+  compilar:
+    name: 1 · Compilar
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Descargar código
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: maven
 
-      # CI=true lo define GitHub Actions: ConfigReader fuerza headless automáticamente
-      - name: Ejecutar pruebas
-        run: mvn -B test -Denv=${{ inputs.env || 'qa' }}
+      - name: Compilar framework y pruebas
+        run: mvn -B -q test-compile
+
+  regresion:
+    name: 2 · Pruebas de regresión
+    needs: compilar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      hay_correcciones: ${{ steps.parche.outputs.hay_correcciones }}
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Despertar API del ambiente
+        run: bash .github/scripts/warmup.sh "$TEST_ENV"
+
+      # CI=true lo define GitHub Actions: ConfigReader fuerza headless automáticamente.
+      # patchSources=true: si el self-healing repara un locator, se corrige en el código para proponer un PR.
+      - name: Ejecutar escenarios de regresión
+        run: >
+          mvn -B test -Denv="$TEST_ENV"
+          "-Dcucumber.filter.tags=not @self-healing and not @manual"
+          -Dhealing.patchSources=true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # sin la key el self-healing se desactiva solo
 
-      - name: Publicar reporte
+      - name: Generar parche de locators corregidos
+        id: parche
+        if: always()
+        run: |
+          mkdir -p target/healing
+          git diff -- src/main/java > target/healing/locators.patch
+          if [ -s target/healing/locators.patch ]; then
+            echo "hay_correcciones=true" >> "$GITHUB_OUTPUT"
+            echo "Se corrigieron locators en el código:"; git diff --stat -- src/main/java
+          else
+            echo "hay_correcciones=false" >> "$GITHUB_OUTPUT"
+            echo "No hubo locators que corregir"
+          fi
+
+      - name: Resumen de self-healing
+        if: always()
+        run: |
+          if [ -f target/healing/healing-report.md ]; then
+            cat target/healing/healing-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo -e "# Self-healing\n\nSin reparaciones: todos los locators funcionaron con su selector original." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar reportes
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cucumber-report
+          name: reporte-regresion
           path: |
             target/cucumber-reports/
             target/healing/
           if-no-files-found: ignore
+
+  demo-self-healing:
+    name: 2 · Demo self-healing (UI simulada)
+    needs: compilar
+    # No corre en la ejecución diaria: es una demostración, no detecta cambios reales
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Despertar API del ambiente
+        run: bash .github/scripts/warmup.sh "$TEST_ENV"
+
+      - name: Ejecutar escenario con cambios de UI simulados
+        run: mvn -B test -Denv="$TEST_ENV" "-Dcucumber.filter.tags=@ui-cambiada"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Resumen de self-healing
+        if: always()
+        run: |
+          if [ -f target/healing/healing-report.md ]; then
+            cat target/healing/healing-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar reportes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-demo-self-healing
+          path: |
+            target/cucumber-reports/
+            target/healing/
+          if-no-files-found: ignore
+
+  pr-correccion:
+    name: 3 · PR de corrección de locators
+    needs: regresion
+    # Solo si hubo correcciones reales y no estamos ya dentro de un PR
+    if: needs.regresion.outputs.hay_correcciones == 'true' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Descargar parche y reporte
+        uses: actions/download-artifact@v4
+        with:
+          name: reporte-regresion
+          path: reporte
+
+      - name: Aplicar corrección en una rama
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$PR_BRANCH"
+          git apply reporte/healing/locators.patch
+          git commit -am "Corrige locators detectados por self-healing"
+          git push --force origin "$PR_BRANCH"
+
+      - name: Crear o actualizar Pull Request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.ref_name }}
+        run: |
+          if gh pr view "$PR_BRANCH" --json state -q .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$PR_BRANCH" --body-file reporte/healing/pr-body.md
+            echo "PR existente actualizado: $(gh pr view "$PR_BRANCH" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh pr create --base "$BASE" --head "$PR_BRANCH" \
+              --title "Self-healing: corrección de locators" \
+              --body-file reporte/healing/pr-body.md
+            echo "PR creado: $(gh pr view "$PR_BRANCH" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
+          fi

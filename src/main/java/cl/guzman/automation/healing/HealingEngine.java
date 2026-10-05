@@ -121,7 +121,7 @@ public final class HealingEngine {
         REPARADOS.put(locator.clave(), nuevo);
         HealingReport.registrar(new Reparacion(Instant.now(), pagina, locator.descripcion(), locator.by().toString(),
                 nuevo.toString(), sugerencia.tipoCambio(), sugerencia.confianza(), sugerencia.razon(), true, null,
-                advisor.modelo(), entrada, salida));
+                advisor.modelo(), entrada, salida, HealingReport.escenarioSimulado()));
         LOG.warn("Self-healing: '{}' reparado {} -> {} (confianza {}%). {}",
                 locator.descripcion(), locator.by(), nuevo, sugerencia.confianza(), sugerencia.razon());
         return Optional.of(nuevo);
@@ -168,7 +168,7 @@ public final class HealingEngine {
                 sugerencia == null ? null : sugerencia.tipoCambio(),
                 sugerencia == null ? 0 : sugerencia.confianza(),
                 sugerencia == null ? null : sugerencia.razon(),
-                false, motivo, advisor.modelo(), entrada, salida));
+                false, motivo, advisor.modelo(), entrada, salida, HealingReport.escenarioSimulado()));
         LOG.error("Self-healing: no se reparó '{}' ({}). Motivo: {}", locator.descripcion(), locator.by(), motivo);
         return Optional.empty();
     }

@@ -18,13 +18,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class Hooks {
 
     private static final Logger LOG = LoggerFactory.getLogger(Hooks.class);
+    private static final Set<String> TAGS_SIMULACION = Set.of("@ui-cambiada", "@ui-rota");
+    private static final Path FUENTES = Path.of("src", "main", "java");
 
     @BeforeAll
     public static void prepararAmbiente() {
@@ -45,8 +49,9 @@ public class Hooks {
     }
 
     @Before(order = 0)
-    public void iniciarNavegador() {
-        HealingReport.iniciarEscenario();
+    public void iniciarNavegador(Scenario scenario) {
+        boolean simulado = scenario.getSourceTagNames().stream().anyMatch(TAGS_SIMULACION::contains);
+        HealingReport.iniciarEscenario(simulado);
         DriverManager.setDriver(DriverFactory.create(ConfigReader.get()));
     }
 
@@ -77,6 +82,10 @@ public class Hooks {
     @AfterAll
     public static void escribirReporteHealing() {
         HealingReport.escribirArchivos();
+        if (ConfigReader.get().healing().patchSources()) {
+            int corregidos = HealingReport.corregirCodigo(FUENTES);
+            LOG.warn("Self-healing: {} locator(es) corregido(s) en el código fuente", corregidos);
+        }
     }
 
     private static void adjuntarReparaciones(Scenario scenario) {

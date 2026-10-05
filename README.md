@@ -92,7 +92,18 @@ src/test/resources/features/   escenarios en español (# language: es)
 ```
 
 ## CI
-GitHub Actions (`.github/workflows/e2e.yml`) ejecuta las pruebas en cada push a `main`, en cada PR y manualmente eligiendo el ambiente. El reporte queda como artefacto del run.
+GitHub Actions (`.github/workflows/e2e.yml`) se ejecuta en cada push a `main`, en cada PR, manualmente (eligiendo el ambiente) y de lunes a viernes a las 08:00 (hora de Chile).
+
+```
+1 · Compilar ──┬──► 2 · Pruebas de regresión ──► 3 · PR de corrección de locators (solo si hubo correcciones reales)
+               └──► 2 · Demo self-healing (UI simulada)   (no corre en la ejecución diaria)
+```
+
+- **Regresión** corre con `-Dhealing.patchSources=true`: si el self-healing repara un locator por un cambio **real** del front, lo corrige en la Page y genera `locators.patch`.
+- **PR de corrección** aplica ese parche en la rama `self-healing/correccion-locators` y abre (o actualiza) un Pull Request con el reporte. El merge siempre es manual.
+- Las reparaciones de escenarios simulados nunca corrigen el código.
+- El resumen de cada run muestra el reporte de self-healing, y los reportes quedan como artefactos.
+- Requisito del repo: *Settings → Actions → General → Workflow permissions →* **Allow GitHub Actions to create and approve pull requests**.
 
 ## Notas
 - Si tienes un `chromedriver.exe` antiguo en el PATH, Maven lo ignora (`SE_SKIP_DRIVER_IN_PATH=true` en el `pom.xml`). Si ejecutas desde el IDE sin Maven, define esa variable de entorno en la configuración de ejecución.

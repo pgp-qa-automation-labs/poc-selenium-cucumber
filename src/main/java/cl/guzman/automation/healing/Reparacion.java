@@ -4,7 +4,8 @@ import java.time.Instant;
 
 /**
  * Registro de un intento de self-healing: qué elemento falló, qué propuso la IA y si se aplicó.
- * Contiene lo necesario para, más adelante, corregir el locator en el código fuente.
+ * Contiene lo necesario para corregir el locator en el código fuente ({@link LocatorPatcher}).
+ * {@code simulada} indica que ocurrió en un escenario con cambios de UI simulados: nunca debe corregir el código.
  */
 public record Reparacion(
         Instant fecha,
@@ -19,5 +20,6 @@ public record Reparacion(
         String motivoRechazo,
         String modelo,
         long tokensEntrada,
-        long tokensSalida) {
+        long tokensSalida,
+        boolean simulada) {
 }

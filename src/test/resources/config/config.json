@@ -24,6 +24,7 @@
     "model": "claude-sonnet-5-5",
     "minConfidence": 80,
     "maxDomChars": 150000,
-    "requestTimeoutSeconds": 120
+    "requestTimeoutSeconds": 120,
+    "patchSources": false
   }
 }
