@@ -17,10 +17,10 @@ Esta rama lo resuelve así:
 
 | Rama | Qué agrega | IA |
 |---|---|---|
-| [`main`](../../tree/main) | Automatización base: Selenium + Cucumber + TestNG con Page Object Model | No |
+| [`main`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/main) | Automatización base: Selenium + Cucumber + TestNG con Page Object Model | No |
 | **`feature/self-healing-ia`** (esta) | **Self-healing:** si un elemento cambia, la IA lo encuentra, la prueba continúa y se propone un PR que corrige el código | Sí (consulta directa) |
-| [`feature/agentes-ia`](../../tree/feature/agentes-ia) | **Agente de triage:** cuando una prueba falla, un agente investiga la causa y crea un issue en GitHub, Jira o Azure DevOps | Sí (agente) |
-| [`demo/locator-obsoleto`](../../tree/demo/locator-obsoleto) | Rama de demostración del PR automático: tiene un selector obsoleto a propósito | — |
+| [`feature/agentes-ia`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/feature/agentes-ia) | **Agente de triage:** cuando una prueba falla, un agente investiga la causa y crea un issue en GitHub, Jira o Azure DevOps | Sí (agente) |
+| [`demo/locator-obsoleto`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/demo/locator-obsoleto) | Rama de demostración del PR automático: tiene un selector obsoleto a propósito | — |
 
 ## Cómo funciona
 
@@ -118,7 +118,7 @@ flowchart TD
 ## Paso a paso para usarlo
 
 ### En tu computador
-1. Sigue el paso a paso de [`main`](../../tree/main#paso-a-paso-para-usarlo) para instalar Java, Maven y Chrome, y descargar el proyecto. Luego cambia a esta rama:
+1. Sigue el paso a paso de [`main`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/main#paso-a-paso-para-usarlo) para instalar Java, Maven y Chrome, y descargar el proyecto. Luego cambia a esta rama:
    ```bash
    git checkout feature/self-healing-ia
    ```
@@ -142,7 +142,7 @@ flowchart TD
 2. **Permite que el pipeline cree PRs:** *Settings → Actions → General → Workflow permissions* → marca **Allow GitHub Actions to create and approve pull requests** (si el repo es de una organización, actívalo primero en la organización).
 3. **Ejecuta:** *Actions → E2E Selenium Cucumber → Run workflow* → elige la rama `feature/self-healing-ia`. Marca **Ejecutar también la demo de self-healing** si quieres ver las reparaciones.
 4. **Revisa el resultado:** en el resumen de la ejecución aparece el reporte de self-healing.
-5. **Para ver el PR automático,** ejecuta el workflow sobre la rama [`demo/locator-obsoleto`](../../tree/demo/locator-obsoleto): tiene un selector viejo a propósito, el self-healing lo repara y la etapa 3 abre un PR con la corrección.
+5. **Para ver el PR automático,** ejecuta el workflow sobre la rama [`demo/locator-obsoleto`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/demo/locator-obsoleto): tiene un selector viejo a propósito, el self-healing lo repara y la etapa 3 abre un PR con la corrección.
 
 ## Configuración
 
