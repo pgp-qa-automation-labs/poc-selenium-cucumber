@@ -37,12 +37,45 @@ src/test/resources/config/
 - **Ventana del navegador:** con navegador visible se maximiza; en headless (CI) usa el tamaño fijo `browser.windowWidth` × `browser.windowHeight`.
 - **Warm-up:** QA usa Render free, que se duerme por inactividad. Antes de abrir el navegador se consulta `apiUrl + /api/hora` hasta que responda (máximo `warmUp.maxSeconds`), para que las esperas de la UI se mantengan cortas.
 
+## Self-healing con IA
+
+Cuando un locator deja de encontrar su elemento, el framework le pide a Claude que lo identifique en el HTML actual y decida si el cambio es **cosmético** (el elemento sigue ahí con la misma función: se repara y el test continúa) o **funcional** (cambió su propósito o desapareció: el test falla, como debe).
+
+```
+BasePage.click(Locator "Botón BUSCAR del buscador principal")
+   ├─ selector original funciona ─────────────► sigue normal (sin llamar a la IA)
+   └─ no encuentra el elemento → HealingEngine
+        ├─ captura el HTML visible (sin scripts/estilos; ocultos marcados)
+        ├─ Claude: nuevo selector + tipo de cambio + confianza + razón (structured outputs)
+        ├─ acepta solo COSMETICO con confianza ≥ healing.minConfidence
+        ├─ valida en el navegador: elemento visible y único
+        └─ usa el selector reparado el resto de la ejecución y lo registra en el reporte
+```
+
+- Cada locator declara **qué es y para qué sirve** (`Locator.of(By..., "Botón BUSCAR del buscador principal")`): esa descripción es la que permite reconocerlo cuando cambia.
+- Requiere `ANTHROPIC_API_KEY` como variable de entorno (en CI, como secreto del repo). **Sin la key el healing se desactiva** y las pruebas se comportan como siempre.
+- Configuración en `config.json` → `healing` (`enabled`, `model`, `minConfidence`, `maxDomChars`, `requestTimeoutSeconds`), con overrides `-Dhealing.clave=valor`.
+- Reporte: adjunto en cada escenario del reporte de Cucumber y en `target/healing/healing-report.{md,json}` (locator original → nuevo, tipo de cambio, confianza, razón, tokens usados).
+
+### Escenarios de demostración (`self_healing.feature`)
+Simulan cambios del front sin tocar el sitio, inyectando un script vía Chrome DevTools Protocol:
+
+| Tag | Simulación | Resultado esperado |
+|---|---|---|
+| `@ui-cambiada` | Renombra 4 clases CSS (botón Buscar, título del listado, título y dirección del detalle) | ✅ La IA repara los 4 locators y el flujo pasa |
+| `@ui-rota` (`@manual`) | Oculta el botón Buscar | ❌ La IA lo clasifica como NO_ENCONTRADO y el escenario falla |
+
+```bash
+mvn test -Dcucumber.filter.tags=@ui-rota
+```
+
 ## Estructura
 
 ```
 src/main/java/cl/guzman/automation/
 ├── config/        ConfigReader y EnvironmentConfig
 ├── driver/        DriverFactory y DriverManager (ThreadLocal)
+├── healing/       Locator, HealingEngine, ClaudeLocatorAdvisor, DomSnapshot, HealingReport
 ├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage
 ├── components/    TarjetaPropiedad
 ├── model/         Propiedad
@@ -52,6 +85,7 @@ src/test/java/cl/guzman/automation/
 ├── context/       TestContext (estado compartido vía PicoContainer)
 ├── hooks/         Hooks (warm-up, navegador, screenshot al fallar)
 ├── runners/       TestRunner (TestNG)
+├── simulation/    UiChangeSimulator (cambios de UI simulados para los escenarios de demostración)
 └── steps/         NavegacionSteps, BusquedaPropiedadSteps, DetallePropiedadSteps
 
 src/test/resources/features/   escenarios en español (# language: es)

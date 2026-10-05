@@ -29,11 +29,14 @@ jobs:
       - name: Ejecutar pruebas
         run: mvn -B test -Denv=${{ inputs.env || 'qa' }}
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # se usará en la fase de Self-healing
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # sin la key el self-healing se desactiva solo
 
       - name: Publicar reporte
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cucumber-report
-          path: target/cucumber-reports/
+          path: |
+            target/cucumber-reports/
+            target/healing/
+          if-no-files-found: ignore

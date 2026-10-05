@@ -18,5 +18,12 @@
     "maxSeconds": 0,
     "pollSeconds": 5,
     "healthPath": "/api/hora"
+  },
+  "healing": {
+    "enabled": true,
+    "model": "claude-sonnet-5-5",
+    "minConfidence": 80,
+    "maxDomChars": 150000,
+    "requestTimeoutSeconds": 120
   }
 }
