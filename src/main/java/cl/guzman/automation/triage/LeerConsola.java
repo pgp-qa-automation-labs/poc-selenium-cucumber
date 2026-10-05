@@ -15,8 +15,11 @@ public class LeerConsola implements Supplier<String> {
 
     @Override
     public String get() {
+        TriageContext contexto = TriageContext.actual();
         try {
-            List<LogEntry> entradas = TriageContext.actual().driver.manage().logs().get(LogType.BROWSER).getAll();
+            List<LogEntry> entradas = contexto.driver.manage().logs().get(LogType.BROWSER).getAll();
+            long errores = entradas.stream().filter(e -> "SEVERE".equals(e.getLevel().getName())).count();
+            contexto.registrarUso("LeerConsola", entradas.size() + " mensajes, " + errores + " errores");
             if (entradas.isEmpty()) {
                 return "La consola del navegador no tiene mensajes.";
             }
@@ -26,6 +29,7 @@ public class LeerConsola implements Supplier<String> {
                     .forEach(e -> salida.append('[').append(e.getLevel()).append("] ").append(recortar(e.getMessage())).append('\n'));
             return salida.toString();
         } catch (RuntimeException e) {
+            contexto.registrarUso("LeerConsola", "error: " + e.getMessage());
             return "No se pudo leer la consola del navegador: " + e.getMessage();
         }
     }

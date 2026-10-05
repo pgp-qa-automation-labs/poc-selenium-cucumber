@@ -14,6 +14,7 @@ public class LeerHtml implements Supplier<String> {
     public String get() {
         TriageContext contexto = TriageContext.actual();
         DomSnapshot.Resultado dom = DomSnapshot.capturar(contexto.driver, contexto.config.healing().maxDomChars());
+        contexto.registrarUso("LeerHtml", dom.largoOriginal() + " caracteres" + (dom.truncado() ? " (truncado)" : ""));
         return (dom.truncado() ? "[HTML truncado: " + dom.largoOriginal() + " caracteres originales]\n" : "") + dom.html();
     }
 }

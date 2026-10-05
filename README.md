@@ -99,7 +99,10 @@ mvn test -Dcucumber.filter.tags=@api-caida
 Al terminar la ejecución, cada diagnóstico se publica como issue en el gestor configurado (`config.json` → `issues`). Hoy: **GitHub Issues**; el diseño (`IssueTracker`) permite agregar Jira y Azure DevOps sin tocar el triage.
 
 - **Dry-run (por defecto en local y en PRs):** no envía nada; escribe en `target/issues/` el payload exacto (`issue-<huella>.json`) y su vista previa (`issue-<huella>.md`) para revisar qué datos se enviarían.
-- **Envío real:** en GitHub Actions fuera de PRs, con el `GITHUB_TOKEN` temporal del workflow (permiso `issues: write`).
+- **Envío real:** en la etapa `3 · Issues de triage` de GitHub Actions (fuera de PRs), con el `GITHUB_TOKEN` temporal del workflow (permiso `issues: write`). Se puede ejecutar aparte sobre un reporte existente:
+  ```bash
+  mvn test-compile exec:java -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues -Dexec.args=target/triage/triage-report.json
+  ```
 - **Sin duplicados:** cada fallo tiene una huella (escenario + paso + categoría + ambiente). Si ya hay un issue abierto con esa huella, se agrega un comentario en vez de abrir otro.
 - **Etiquetas:** `triage-ia`, `severidad:*`, `categoria:*`, `area:*` y `demo` cuando el fallo viene de una simulación.
 - **Qué se envía:** título, severidad, categoría, área, confianza, causa probable, evidencias, acción recomendada, escenario, paso, URL, ambiente, rama/commit y enlace a la ejecución. **No se envía:** la captura, el HTML completo, la consola ni ningún secreto (la captura queda en los artefactos del run enlazado).
@@ -136,11 +139,14 @@ src/test/resources/features/   escenarios en español (# language: es)
 GitHub Actions (`.github/workflows/e2e.yml`) se ejecuta en cada push a `main`, en cada PR, manualmente (eligiendo el ambiente) y de lunes a viernes a las 08:00 (hora de Chile).
 
 ```
-1 · Compilar ──┬──► 2 · Pruebas de regresión ──► 3 · PR de corrección de locators (solo si hubo correcciones reales)
+1 · Compilar ──┬──► 2 · Pruebas de regresión ──┬──► 3 · PR de corrección de locators  (si hubo correcciones reales)
+               │                                └──► 3 · Issues de triage              (si hubo diagnósticos)
                └──► 2 · Demo self-healing (UI simulada)   (no corre en la ejecución diaria)
 ```
 
-- **Regresión** corre con `-Dhealing.patchSources=true`: si el self-healing repara un locator por un cambio **real** del front, lo corrige en la Page y genera `locators.patch`.
+- **Regresión** corre con `-Dhealing.patchSources=true`: si el self-healing repara un locator por un cambio **real** del front, lo corrige en la Page y genera `locators.patch`. Si un escenario falla, el agente de triage lo diagnostica (con el navegador abierto) y deja `triage-report.json`. En el log, cada análisis es una sección plegable que muestra las herramientas que usó el agente.
+- **Issues de triage** corre aunque la regresión falle: lee los diagnósticos del artefacto y los publica (`PublicarIssues`). Es la única etapa con permiso para escribir issues; las pruebas solo diagnostican. En PRs queda en dry-run.
+- Al lanzar el workflow a mano, el campo **escenarios** acepta una expresión de tags (ej. `@ui-rota`) para correr las demos.
 - **PR de corrección** aplica ese parche en la rama `self-healing/correccion-locators` y abre (o actualiza) un Pull Request con el reporte. El merge siempre es manual.
 - Las reparaciones de escenarios simulados nunca corrigen el código.
 - El resumen de cada run muestra el reporte de self-healing, y los reportes quedan como artefactos.

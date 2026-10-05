@@ -24,6 +24,12 @@ public class ConsultarApi implements Supplier<String> {
 
     @Override
     public String get() {
+        String resultado = consultar();
+        TriageContext.actual().registrarUso("ConsultarApi", resultado.lines().findFirst().orElse(""));
+        return resultado;
+    }
+
+    private String consultar() {
         if (ruta == null || !ruta.startsWith("/api/") || ruta.contains("..") || ruta.contains("://")) {
             return "Ruta no permitida: debe empezar con /api/ y ser relativa.";
         }

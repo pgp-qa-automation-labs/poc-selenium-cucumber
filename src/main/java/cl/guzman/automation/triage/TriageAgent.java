@@ -1,6 +1,7 @@
 package cl.guzman.automation.triage;
 
 import cl.guzman.automation.config.EnvironmentConfig;
+import cl.guzman.automation.utils.CiLog;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.core.JsonSchemaLocalValidation;
@@ -73,6 +74,7 @@ public class TriageAgent {
      */
     public Optional<Diagnostico> analizar(WebDriver driver, FalloEscenario fallo, byte[] capturaPng) {
         String modelo = config.triage().model();
+        CiLog.abrirGrupo("🔎 Triage IA: " + fallo.escenario());
         LOG.info("Triage: analizando el fallo de '{}' con {}...", fallo.escenario(), modelo);
         TriageContext.iniciar(driver, config);
         try {
@@ -137,6 +139,7 @@ public class TriageAgent {
             LOG.error("Triage: el análisis falló: {}", e.getMessage(), e);
         } finally {
             TriageContext.limpiar();
+            CiLog.cerrarGrupo();
         }
         return Optional.empty();
     }

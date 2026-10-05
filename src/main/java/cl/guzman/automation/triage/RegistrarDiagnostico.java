@@ -35,7 +35,9 @@ public class RegistrarDiagnostico implements Supplier<String> {
 
     @Override
     public String get() {
-        TriageContext.actual().registrar(this);
+        TriageContext contexto = TriageContext.actual();
+        contexto.registrarUso("RegistrarDiagnostico", categoria + " · " + severidad + " · " + areaResponsable + " (" + confianza + "%)");
+        contexto.registrar(this);
         return "Diagnóstico registrado. La investigación terminó; no llames más herramientas.";
     }
 }

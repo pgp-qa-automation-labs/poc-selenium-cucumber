@@ -28,6 +28,7 @@
 
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
     </properties>
 
     <dependencies>
@@ -118,6 +119,16 @@
                         <!-- Selenium Manager ignora drivers viejos en el PATH y usa el que calza con el navegador -->
                         <SE_SKIP_DRIVER_IN_PATH>true</SE_SKIP_DRIVER_IN_PATH>
                     </environmentVariables>
+                </configuration>
+            </plugin>
+            <!-- Ejecuta tareas del pipeline fuera de las pruebas (ej. publicar issues del triage).
+                 classpathScope=test: la configuración (config.json) vive en src/test/resources -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec-maven-plugin.version}</version>
+                <configuration>
+                    <classpathScope>test</classpathScope>
                 </configuration>
             </plugin>
         </plugins>
