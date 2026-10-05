@@ -24,7 +24,7 @@ public class HomePage extends BasePage {
             By.cssSelector(".buscador-hero select[name='comuna']"),
             "Selector de comuna del buscador principal");
     private static final Locator BOTON_BUSCAR = Locator.of(
-            By.cssSelector(".buscador-hero__btn"),
+            By.cssSelector(".buscador-hero__boton"),
             "Botón BUSCAR que ejecuta la búsqueda del buscador principal del home");
 
     public HomePage(WebDriver driver) {
