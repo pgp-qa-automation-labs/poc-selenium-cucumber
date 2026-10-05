@@ -32,9 +32,9 @@ Cada rama agrega un nivel sobre la anterior:
 | Rama | Qué agrega | IA |
 |---|---|---|
 | **`main`** (esta) | Automatización base: Selenium + Cucumber + TestNG con Page Object Model | No |
-| [`feature/self-healing-ia`](../../tree/feature/self-healing-ia) | **Self-healing:** si un elemento de la página cambia, la IA lo encuentra, la prueba continúa y se propone un PR que corrige el código | Sí (consulta directa) |
-| [`feature/agentes-ia`](../../tree/feature/agentes-ia) | **Agente de triage:** cuando una prueba falla, un agente investiga la causa y crea un issue en GitHub, Jira o Azure DevOps | Sí (agente) |
-| [`demo/locator-obsoleto`](../../tree/demo/locator-obsoleto) | Rama de demostración del PR automático del self-healing | — |
+| [`feature/self-healing-ia`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/feature/self-healing-ia) | **Self-healing:** si un elemento de la página cambia, la IA lo encuentra, la prueba continúa y se propone un PR que corrige el código | Sí (consulta directa) |
+| [`feature/agentes-ia`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/feature/agentes-ia) | **Agente de triage:** cuando una prueba falla, un agente investiga la causa y crea un issue en GitHub, Jira o Azure DevOps | Sí (agente) |
+| [`demo/locator-obsoleto`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/demo/locator-obsoleto) | Rama de demostración del PR automático del self-healing | — |
 
 ## Cómo funciona
 
