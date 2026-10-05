@@ -13,6 +13,8 @@ public record Diagnostico(
         String feature,
         String pasoFallido,
         String url,
+        String ambiente,
+        boolean simulado,
         Categoria categoria,
         Severidad severidad,
         Area areaResponsable,

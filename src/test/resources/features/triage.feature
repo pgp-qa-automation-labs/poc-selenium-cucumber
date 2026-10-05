@@ -7,9 +7,10 @@ Característica: Triage de fallos con IA
 
   # Escenario de demostración: se espera que FALLE. El navegador bloquea las llamadas del front a la API
   # de propiedades, como si el backend estuviera caído. El triage debería identificar el problema de backend.
+  # El nombre es neutral a propósito: el agente de triage no debe deducir la causa por el título.
   #   mvn test -Dcucumber.filter.tags=@api-caida
   @api-caida @manual
-  Escenario: El triage identifica un backend caído cuando el listado viene vacío
+  Escenario: Consultar el listado de departamentos en venta en Ñuñoa
     Dado que el usuario está en el home de Guzmán Corretaje
     Cuando selecciona la operación "Comprar"
     Y filtra por tipo "Departamento", región "Región Metropolitana" y comuna "Ñuñoa"

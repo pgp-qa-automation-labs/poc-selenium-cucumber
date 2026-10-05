@@ -31,6 +31,12 @@ public final class TriageReport {
         DIAGNOSTICOS.add(diagnostico);
     }
 
+    public static List<Diagnostico> deLaEjecucion() {
+        synchronized (DIAGNOSTICOS) {
+            return List.copyOf(DIAGNOSTICOS);
+        }
+    }
+
     public static String aMarkdown(Diagnostico d) {
         StringBuilder md = new StringBuilder()
                 .append("## 🔎 ").append(d.titulo()).append("\n\n")

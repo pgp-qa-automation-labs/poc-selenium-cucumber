@@ -8,6 +8,7 @@ import java.util.List;
  * @param pasos             pasos ejecutados en orden, con su estado (PASSED, FAILED, SKIPPED...)
  * @param error             mensaje del error del paso fallido (resumido)
  * @param reparacionesHealing resumen en markdown de los intentos de self-healing del escenario (puede estar vacío)
+ * @param simulado          true si el escenario simula una falla (demo); no se informa al agente para no sesgarlo
  */
 public record FalloEscenario(
         String escenario,
@@ -17,7 +18,8 @@ public record FalloEscenario(
         String pasoFallido,
         String error,
         String ambiente,
-        String reparacionesHealing) {
+        String reparacionesHealing,
+        boolean simulado) {
 
     public record Paso(String texto, String estado) {
     }

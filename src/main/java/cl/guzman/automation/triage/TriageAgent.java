@@ -123,7 +123,7 @@ public class TriageAgent {
                 return Optional.empty();
             }
             Diagnostico diagnostico = new Diagnostico(Instant.now(), fallo.escenario(), fallo.feature(), fallo.pasoFallido(),
-                    driver.getCurrentUrl(), registrado.categoria, registrado.severidad, registrado.areaResponsable,
+                    driver.getCurrentUrl(), fallo.ambiente(), fallo.simulado(), registrado.categoria, registrado.severidad, registrado.areaResponsable,
                     registrado.titulo, registrado.causaProbable,
                     registrado.evidencias == null ? List.of() : List.copyOf(registrado.evidencias),
                     registrado.accionRecomendada, registrado.confianza, modelo, iteraciones, entrada, salida);

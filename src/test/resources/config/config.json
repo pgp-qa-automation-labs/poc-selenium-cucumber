@@ -32,5 +32,12 @@
     "model": "claude-sonnet-5-5",
     "maxIterations": 8,
     "requestTimeoutSeconds": 180
+  },
+  "issues": {
+    "enabled": true,
+    "tracker": "github",
+    "dryRun": true,
+    "minConfidence": 60,
+    "githubRepository": "pgp-qa-automation-labs/poc-selenium-cucumber"
   }
 }

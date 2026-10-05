@@ -61,14 +61,24 @@ public final class HealingReport {
      * Resumen legible de una lista de reparaciones (para adjuntar al reporte de Cucumber o al PR).
      */
     public static String aMarkdown(List<Reparacion> reparaciones) {
+        return aMarkdown(reparaciones, true);
+    }
+
+    /**
+     * @param incluirOrigen false para omitir si la reparación vino de una simulación (ej. al enviarlo a otro agente,
+     *                      para no sesgar su análisis)
+     */
+    public static String aMarkdown(List<Reparacion> reparaciones, boolean incluirOrigen) {
         StringBuilder md = new StringBuilder("# Self-healing\n\n");
         long aplicadas = reparaciones.stream().filter(Reparacion::aplicada).count();
         md.append("Reparaciones aplicadas: **").append(aplicadas).append("** de ").append(reparaciones.size()).append("\n\n");
         for (Reparacion r : reparaciones) {
             md.append("## ").append(r.aplicada() ? "✅ " : "❌ ").append(r.descripcion()).append("\n\n")
-                    .append("| | |\n|---|---|\n")
-                    .append("| Origen | ").append(r.simulada() ? "Simulación de cambios de UI" : "Cambio real de la página").append(" |\n")
-                    .append("| Página | `").append(r.pagina()).append("` |\n")
+                    .append("| | |\n|---|---|\n");
+            if (incluirOrigen) {
+                md.append("| Origen | ").append(r.simulada() ? "Simulación de cambios de UI" : "Cambio real de la página").append(" |\n");
+            }
+            md.append("| Página | `").append(r.pagina()).append("` |\n")
                     .append("| Locator original | `").append(r.locatorOriginal()).append("` |\n")
                     .append("| Locator nuevo | ").append(r.locatorNuevo() == null ? "—" : "`" + r.locatorNuevo() + "`").append(" |\n")
                     .append("| Tipo de cambio | ").append(r.tipoCambio() == null ? "—" : r.tipoCambio()).append(" |\n")

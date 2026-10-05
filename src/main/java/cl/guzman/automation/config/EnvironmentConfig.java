@@ -11,6 +11,7 @@ public record EnvironmentConfig(
         WarmUp warmUp,
         Healing healing,
         Triage triage,
+        Issues issues,
         Secrets secrets) {
 
     /**
@@ -57,11 +58,26 @@ public record EnvironmentConfig(
     public record Triage(boolean enabled, String model, int maxIterations, int requestTimeoutSeconds) {
     }
 
-    public record Secrets(String anthropicApiKey) {
+    /**
+     * Publicación de los diagnósticos del triage como issues en un gestor de proyectos.
+     *
+     * @param tracker          gestor destino ("github"; más adelante "jira" y "azuredevops")
+     * @param dryRun           true: no envía nada, escribe en target/issues/ el payload exacto que se enviaría
+     * @param minConfidence    confianza mínima del diagnóstico para publicarlo
+     * @param githubRepository repositorio destino en formato owner/repo
+     */
+    public record Issues(boolean enabled, String tracker, boolean dryRun, int minConfidence, String githubRepository) {
+    }
+
+    public record Secrets(String anthropicApiKey, String githubToken) {
 
         @Override
         public String toString() {
-            return "Secrets[anthropicApiKey=" + (anthropicApiKey == null || anthropicApiKey.isEmpty() ? "<vacía>" : "****") + "]";
+            return "Secrets[anthropicApiKey=" + enmascarar(anthropicApiKey) + ", githubToken=" + enmascarar(githubToken) + "]";
+        }
+
+        private static String enmascarar(String valor) {
+            return valor == null || valor.isEmpty() ? "<vacía>" : "****";
         }
     }
 }

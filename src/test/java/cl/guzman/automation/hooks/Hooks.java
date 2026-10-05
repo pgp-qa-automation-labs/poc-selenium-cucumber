@@ -6,6 +6,7 @@ import cl.guzman.automation.driver.DriverFactory;
 import cl.guzman.automation.driver.DriverManager;
 import cl.guzman.automation.healing.HealingReport;
 import cl.guzman.automation.healing.Reparacion;
+import cl.guzman.automation.issues.IssuePublisher;
 import cl.guzman.automation.listeners.PasosListener;
 import cl.guzman.automation.simulation.UiChangeSimulator;
 import cl.guzman.automation.triage.FalloEscenario;
@@ -98,6 +99,7 @@ public class Hooks {
     @AfterAll
     public static void escribirReportes() {
         TriageReport.escribirArchivos();
+        IssuePublisher.publicar(TriageReport.deLaEjecucion(), ConfigReader.get(), System.getenv());
         HealingReport.escribirArchivos();
         if (ConfigReader.get().healing().patchSources()) {
             int corregidos = HealingReport.corregirCodigo(FUENTES);
@@ -127,7 +129,8 @@ public class Hooks {
                 ejecucion.pasoFallido(),
                 ejecucion.error(),
                 config.env(),
-                reparaciones.isEmpty() ? "" : HealingReport.aMarkdown(reparaciones));
+                reparaciones.isEmpty() ? "" : HealingReport.aMarkdown(reparaciones, false),
+                scenario.getSourceTagNames().stream().anyMatch(TAGS_SIMULACION::contains));
 
         new TriageAgent(config).analizar(DriverManager.getDriver(), fallo, captura).ifPresent(diagnostico -> {
             TriageReport.registrar(diagnostico);

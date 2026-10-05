@@ -95,6 +95,18 @@ El diagnóstico (categoría, severidad, área responsable, causa probable, evide
 mvn test -Dcucumber.filter.tags=@api-caida
 ```
 
+### Publicación de issues
+Al terminar la ejecución, cada diagnóstico se publica como issue en el gestor configurado (`config.json` → `issues`). Hoy: **GitHub Issues**; el diseño (`IssueTracker`) permite agregar Jira y Azure DevOps sin tocar el triage.
+
+- **Dry-run (por defecto en local y en PRs):** no envía nada; escribe en `target/issues/` el payload exacto (`issue-<huella>.json`) y su vista previa (`issue-<huella>.md`) para revisar qué datos se enviarían.
+- **Envío real:** en GitHub Actions fuera de PRs, con el `GITHUB_TOKEN` temporal del workflow (permiso `issues: write`).
+- **Sin duplicados:** cada fallo tiene una huella (escenario + paso + categoría + ambiente). Si ya hay un issue abierto con esa huella, se agrega un comentario en vez de abrir otro.
+- **Etiquetas:** `triage-ia`, `severidad:*`, `categoria:*`, `area:*` y `demo` cuando el fallo viene de una simulación.
+- **Qué se envía:** título, severidad, categoría, área, confianza, causa probable, evidencias, acción recomendada, escenario, paso, URL, ambiente, rama/commit y enlace a la ejecución. **No se envía:** la captura, el HTML completo, la consola ni ningún secreto (la captura queda en los artefactos del run enlazado).
+- Se omiten diagnósticos `INDETERMINADO` o con confianza menor a `issues.minConfidence`.
+
+Para probarlo en GitHub: *Actions → Run workflow*, elegir la rama y en **escenarios** escribir `@ui-rota` o `@api-caida`.
+
 ## Estructura
 
 ```
@@ -103,6 +115,7 @@ src/main/java/cl/guzman/automation/
 ├── driver/        DriverFactory y DriverManager (ThreadLocal)
 ├── healing/       Locator, HealingEngine, ClaudeLocatorAdvisor, DomSnapshot, HealingReport
 ├── triage/        TriageAgent, herramientas del agente, Diagnostico, TriageReport
+├── issues/        IssueTracker, GitHubIssueTracker, IssuePublisher (publicación de diagnósticos)
 ├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage
 ├── components/    TarjetaPropiedad
 ├── model/         Propiedad

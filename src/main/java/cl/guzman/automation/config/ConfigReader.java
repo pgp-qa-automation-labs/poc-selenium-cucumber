@@ -60,7 +60,9 @@ public final class ConfigReader {
         validar(config, env);
 
         config.put("env", env);
-        config.putObject("secrets").put("anthropicApiKey", sysEnv.getOrDefault("ANTHROPIC_API_KEY", ""));
+        config.putObject("secrets")
+                .put("anthropicApiKey", sysEnv.getOrDefault("ANTHROPIC_API_KEY", ""))
+                .put("githubToken", sysEnv.getOrDefault("GITHUB_TOKEN", ""));
 
         try {
             return MAPPER.treeToValue(config, EnvironmentConfig.class);

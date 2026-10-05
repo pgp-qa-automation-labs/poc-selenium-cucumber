@@ -11,6 +11,10 @@ on:
         type: choice
         options: [qa, prod]
         default: qa
+      escenarios:
+        description: Expresión de tags de Cucumber (ej. @api-caida para correr una demo de triage)
+        type: string
+        default: not @self-healing and not @manual
   # Ejecución diaria (lunes a viernes, 08:00 hora de Chile) para detectar cambios del front aunque nadie haga push
   schedule:
     - cron: '0 11 * * 1-5'
@@ -25,6 +29,9 @@ concurrency:
 
 env:
   TEST_ENV: ${{ inputs.env || 'qa' }}
+  ESCENARIOS: ${{ inputs.escenarios || 'not @self-healing and not @manual' }}
+  # Los issues reales solo se crean fuera de PRs; dentro de un PR se genera solo la vista previa (dry-run)
+  ISSUES_DRY_RUN: ${{ github.event_name == 'pull_request' }}
   PR_BRANCH: self-healing/correccion-locators
 
 jobs:
@@ -51,6 +58,9 @@ jobs:
     needs: compilar
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
     outputs:
       hay_correcciones: ${{ steps.parche.outputs.hay_correcciones }}
     steps:
@@ -72,10 +82,12 @@ jobs:
       - name: Ejecutar escenarios de regresión
         run: >
           mvn -B test -Denv="$TEST_ENV"
-          "-Dcucumber.filter.tags=not @self-healing and not @manual"
+          "-Dcucumber.filter.tags=$ESCENARIOS"
           -Dhealing.patchSources=true
+          -Dissues.dryRun=$ISSUES_DRY_RUN
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # sin la key el self-healing se desactiva solo
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # sin la key el self-healing y el triage se desactivan solos
+          GITHUB_TOKEN: ${{ github.token }}                   # token temporal del workflow para crear issues
 
       - name: Generar parche de locators corregidos
         id: parche
@@ -94,9 +106,9 @@ jobs:
       - name: Resumen de triage y self-healing
         if: always()
         run: |
-          if [ -f target/triage/triage-report.md ]; then
-            cat target/triage/triage-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for reporte in target/triage/triage-report.md target/issues/issues-report.md; do
+            if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
           if [ -f target/healing/healing-report.md ]; then
             cat target/healing/healing-report.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -112,6 +124,7 @@ jobs:
             target/cucumber-reports/
             target/healing/
             target/triage/
+            target/issues/
           if-no-files-found: ignore
 
   demo-self-healing:
@@ -121,6 +134,9 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -136,14 +152,15 @@ jobs:
         run: bash .github/scripts/warmup.sh "$TEST_ENV"
 
       - name: Ejecutar escenario con cambios de UI simulados
-        run: mvn -B test -Denv="$TEST_ENV" "-Dcucumber.filter.tags=@ui-cambiada"
+        run: mvn -B test -Denv="$TEST_ENV" "-Dcucumber.filter.tags=@ui-cambiada" -Dissues.dryRun=$ISSUES_DRY_RUN
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Resumen de triage y self-healing
         if: always()
         run: |
-          for reporte in target/triage/triage-report.md target/healing/healing-report.md; do
+          for reporte in target/triage/triage-report.md target/issues/issues-report.md target/healing/healing-report.md; do
             if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; fi
           done
 
@@ -156,6 +173,7 @@ jobs:
             target/cucumber-reports/
             target/healing/
             target/triage/
+            target/issues/
           if-no-files-found: ignore
 
   pr-correccion:
