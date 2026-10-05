@@ -88,7 +88,7 @@ src/test/java/cl/guzman/automation/
 ├── simulation/    UiChangeSimulator (cambios de UI simulados para los escenarios de demostración)
 └── steps/         NavegacionSteps, BusquedaPropiedadSteps, DetallePropiedadSteps
 
-src/test/resources/features/   escenarios en español (# language: es)
+src/test/resources/features/   escenarios Gherkin (palabras clave en inglés, pasos en español)
 ```
 
 ## CI

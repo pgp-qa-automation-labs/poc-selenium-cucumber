@@ -5,8 +5,8 @@ import cl.guzman.automation.context.TestContext;
 import cl.guzman.automation.model.Propiedad;
 import cl.guzman.automation.pages.DetallePropiedadPage;
 import cl.guzman.automation.pages.ResultadosPage;
-import io.cucumber.java.es.Cuando;
-import io.cucumber.java.es.Entonces;
+import io.cucumber.java.en.When;
+import io.cucumber.java.en.Then;
 import org.assertj.core.api.SoftAssertions;
 
 public class DetallePropiedadSteps {
@@ -17,7 +17,7 @@ public class DetallePropiedadSteps {
         this.context = context;
     }
 
-    @Cuando("abre el detalle de la primera propiedad del listado")
+    @When("abre el detalle de la primera propiedad del listado")
     public void abreElDetalleDeLaPrimeraPropiedad() {
         ResultadosPage resultados = new ResultadosPage(context.getDriver());
         TarjetaPropiedad tarjeta = resultados.obtenerPrimeraTarjeta();
@@ -25,7 +25,7 @@ public class DetallePropiedadSteps {
         resultados.abrirDetalle(tarjeta);
     }
 
-    @Entonces("el detalle muestra el mismo título, ubicación, precio y código de la propiedad seleccionada")
+    @Then("el detalle muestra el mismo título, ubicación, precio y código de la propiedad seleccionada")
     public void elDetalleMuestraLosMismosDatos() {
         Propiedad esperada = context.getPropiedadSeleccionada();
         Propiedad actual = new DetallePropiedadPage(context.getDriver()).obtenerPropiedad();
@@ -40,7 +40,7 @@ public class DetallePropiedadSteps {
         soft.assertAll();
     }
 
-    @Entonces("el detalle muestra las características {string} y {string}")
+    @Then("el detalle muestra las características {string} y {string}")
     public void elDetalleMuestraLasCaracteristicas(String primera, String segunda) {
         DetallePropiedadPage detalle = new DetallePropiedadPage(context.getDriver());
 
