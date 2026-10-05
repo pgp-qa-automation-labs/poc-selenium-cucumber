@@ -91,9 +91,12 @@ jobs:
             echo "No hubo locators que corregir"
           fi
 
-      - name: Resumen de self-healing
+      - name: Resumen de triage y self-healing
         if: always()
         run: |
+          if [ -f target/triage/triage-report.md ]; then
+            cat target/triage/triage-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -f target/healing/healing-report.md ]; then
             cat target/healing/healing-report.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -108,6 +111,7 @@ jobs:
           path: |
             target/cucumber-reports/
             target/healing/
+            target/triage/
           if-no-files-found: ignore
 
   demo-self-healing:
@@ -136,12 +140,12 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Resumen de self-healing
+      - name: Resumen de triage y self-healing
         if: always()
         run: |
-          if [ -f target/healing/healing-report.md ]; then
-            cat target/healing/healing-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for reporte in target/triage/triage-report.md target/healing/healing-report.md; do
+            if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
 
       - name: Publicar reportes
         if: always()
@@ -151,6 +155,7 @@ jobs:
           path: |
             target/cucumber-reports/
             target/healing/
+            target/triage/
           if-no-files-found: ignore
 
   pr-correccion:

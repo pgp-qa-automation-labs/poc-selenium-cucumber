@@ -10,14 +10,25 @@ public record EnvironmentConfig(
         Timeouts timeouts,
         WarmUp warmUp,
         Healing healing,
+        Triage triage,
         Secrets secrets) {
+
+    /**
+     * El triage solo opera si está habilitado y hay una API key disponible.
+     */
+    public boolean triageActivo() {
+        return triage != null && triage.enabled() && tieneApiKey();
+    }
+
+    private boolean tieneApiKey() {
+        return secrets != null && secrets.anthropicApiKey() != null && !secrets.anthropicApiKey().isBlank();
+    }
 
     /**
      * El healing solo opera si está habilitado y hay una API key disponible; sin key el framework funciona como siempre.
      */
     public boolean healingActivo() {
-        return healing != null && healing.enabled()
-                && secrets != null && secrets.anthropicApiKey() != null && !secrets.anthropicApiKey().isBlank();
+        return healing != null && healing.enabled() && tieneApiKey();
     }
 
     public record App(String baseUrl, String apiUrl) {
@@ -38,6 +49,12 @@ public record EnvironmentConfig(
      */
     public record Healing(boolean enabled, String model, int minConfidence, int maxDomChars, int requestTimeoutSeconds,
                           boolean patchSources) {
+    }
+
+    /**
+     * @param maxIterations máximo de vueltas del agente (cada vuelta es una llamada a la API)
+     */
+    public record Triage(boolean enabled, String model, int maxIterations, int requestTimeoutSeconds) {
     }
 
     public record Secrets(String anthropicApiKey) {

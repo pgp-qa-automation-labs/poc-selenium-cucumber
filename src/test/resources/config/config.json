@@ -26,5 +26,11 @@
     "maxDomChars": 150000,
     "requestTimeoutSeconds": 120,
     "patchSources": false
+  },
+  "triage": {
+    "enabled": true,
+    "model": "claude-sonnet-5-5",
+    "maxIterations": 8,
+    "requestTimeoutSeconds": 180
   }
 }

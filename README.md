@@ -69,6 +69,32 @@ Simulan cambios del front sin tocar el sitio, inyectando un script vía Chrome D
 mvn test -Dcucumber.filter.tags=@ui-rota
 ```
 
+## Triage de fallos con IA (agente)
+
+Cuando un escenario falla, un agente de Claude investiga la causa **con el navegador todavía abierto en el estado del fallo**. Recibe el escenario, los pasos, el error, los intentos de self-healing y la captura de pantalla, y decide por su cuenta qué más revisar:
+
+| Herramienta | Para qué |
+|---|---|
+| `LeerHtml` | HTML visible actual (mismo formato reducido que el self-healing) |
+| `LeerConsola` | Errores de JavaScript y peticiones fallidas en la consola del navegador |
+| `ConsultarApi` | `GET` a la API del ambiente (solo rutas `/api/...`) para saber si el backend responde |
+| `RegistrarDiagnostico` | Cierra la investigación con el diagnóstico estructurado |
+
+El diagnóstico (categoría, severidad, área responsable, causa probable, evidencias, acción recomendada y confianza) se adjunta al escenario en el reporte de Cucumber, al resumen del pipeline y a `target/triage/triage-report.{md,json}`. Es independiente del gestor de proyectos: es el insumo para crear issues en GitHub, Jira o Azure DevOps.
+
+- Categorías: `BUG_APLICACION`, `AMBIENTE_NO_DISPONIBLE`, `CAMBIO_FUNCIONAL_UI`, `DATOS_DE_PRUEBA`, `PROBLEMA_DEL_TEST`, `INDETERMINADO`.
+- Solo se ejecuta cuando un escenario falla: sin fallos, no hay costo. Un problema del triage nunca cambia el resultado del test.
+- Configuración en `config.json` → `triage` (`enabled`, `model`, `maxIterations`, `requestTimeoutSeconds`).
+
+| Demo | Simulación | Diagnóstico esperado |
+|---|---|---|
+| `@api-caida` (`@manual`) | El navegador bloquea las llamadas a `/api/properties` | `AMBIENTE_NO_DISPONIBLE`, infraestructura |
+| `@ui-rota` (`@manual`) | El botón Buscar desaparece | `BUG_APLICACION`, frontend |
+
+```bash
+mvn test -Dcucumber.filter.tags=@api-caida
+```
+
 ## Estructura
 
 ```
@@ -76,6 +102,7 @@ src/main/java/cl/guzman/automation/
 ├── config/        ConfigReader y EnvironmentConfig
 ├── driver/        DriverFactory y DriverManager (ThreadLocal)
 ├── healing/       Locator, HealingEngine, ClaudeLocatorAdvisor, DomSnapshot, HealingReport
+├── triage/        TriageAgent, herramientas del agente, Diagnostico, TriageReport
 ├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage
 ├── components/    TarjetaPropiedad
 ├── model/         Propiedad
@@ -83,7 +110,8 @@ src/main/java/cl/guzman/automation/
 
 src/test/java/cl/guzman/automation/
 ├── context/       TestContext (estado compartido vía PicoContainer)
-├── hooks/         Hooks (warm-up, navegador, screenshot al fallar)
+├── hooks/         Hooks (warm-up, navegador, screenshot y triage al fallar)
+├── listeners/     PasosListener (pasos y error del escenario, para el triage)
 ├── runners/       TestRunner (TestNG)
 ├── simulation/    UiChangeSimulator (cambios de UI simulados para los escenarios de demostración)
 └── steps/         NavegacionSteps, BusquedaPropiedadSteps, DetallePropiedadSteps

@@ -62,6 +62,18 @@ public final class UiChangeSimulator {
     private UiChangeSimulator() {
     }
 
+    /**
+     * Bloquea en el navegador las peticiones que coincidan con los patrones (ej. la API del backend),
+     * para simular un servicio caído sin afectar al ambiente real.
+     */
+    public static void bloquearPeticiones(WebDriver driver, List<String> patrones) {
+        if (!(driver instanceof HasCdp cdp)) {
+            throw new IllegalStateException("La simulación requiere un navegador Chromium (Chrome/Edge)");
+        }
+        cdp.executeCdpCommand("Network.enable", Map.of());
+        cdp.executeCdpCommand("Network.setBlockedURLs", Map.of("urls", patrones));
+    }
+
     public static void aplicar(WebDriver driver, Map<String, String> renombrarClases, List<String> ocultarSelectores) {
         if (!(driver instanceof HasCdp cdp)) {
             throw new IllegalStateException("La simulación de cambios de UI requiere un navegador Chromium (Chrome/Edge)");
