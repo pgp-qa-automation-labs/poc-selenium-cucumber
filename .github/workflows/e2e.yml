@@ -15,6 +15,10 @@ on:
         description: Expresión de tags de Cucumber (ej. @api-caida para correr una demo de triage)
         type: string
         default: not @self-healing and not @manual
+      demo_self_healing:
+        description: Ejecutar también la demo de self-healing (cambios de UI simulados, ~USD 0,10)
+        type: boolean
+        default: false
   # Ejecución diaria (lunes a viernes, 08:00 hora de Chile) para detectar cambios del front aunque nadie haga push
   schedule:
     - cron: '0 11 * * 1-5'
@@ -137,8 +141,8 @@ jobs:
   demo-self-healing:
     name: 2 · Demo self-healing (UI simulada)
     needs: compilar
-    # No corre en la ejecución diaria: es una demostración, no detecta cambios reales
-    if: github.event_name != 'schedule'
+    # Es una demostración (no detecta cambios reales) y consume IA: solo corre si se pide al lanzar el workflow a mano
+    if: github.event_name == 'workflow_dispatch' && inputs.demo_self_healing
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
