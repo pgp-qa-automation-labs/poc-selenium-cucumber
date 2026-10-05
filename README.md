@@ -96,8 +96,10 @@ GitHub Actions (`.github/workflows/e2e.yml`) se ejecuta en cada push a `main`, e
 
 ```
 1 · Compilar ──┬──► 2 · Pruebas de regresión ──► 3 · PR de corrección de locators (solo si hubo correcciones reales)
-               └──► 2 · Demo self-healing (UI simulada)   (no corre en la ejecución diaria)
+               └──► 2 · Demo self-healing (UI simulada)   (opcional: solo al lanzarlo a mano marcando la casilla)
 ```
+
+- **Demo self-healing** corre en paralelo a la regresión porque es independiente: altera la página a propósito para demostrar las reparaciones, así que se mantiene separada para no mezclarse con los resultados reales. Como consume IA sin detectar problemas nuevos, solo se ejecuta al lanzar el workflow a mano con la casilla *Ejecutar también la demo de self-healing*.
 
 - **Regresión** corre con `-Dhealing.patchSources=true`: si el self-healing repara un locator por un cambio **real** del front, lo corrige en la Page y genera `locators.patch`.
 - **PR de corrección** aplica ese parche en la rama `self-healing/correccion-locators` y abre (o actualiza) un Pull Request con el reporte. El merge siempre es manual.
