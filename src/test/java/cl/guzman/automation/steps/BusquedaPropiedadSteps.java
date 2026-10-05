@@ -5,8 +5,8 @@ import cl.guzman.automation.context.TestContext;
 import cl.guzman.automation.pages.HomePage;
 import cl.guzman.automation.pages.ResultadosPage;
 import cl.guzman.automation.utils.TextUtils;
-import io.cucumber.java.es.Cuando;
-import io.cucumber.java.es.Entonces;
+import io.cucumber.java.en.When;
+import io.cucumber.java.en.Then;
 import org.assertj.core.api.SoftAssertions;
 
 import java.util.List;
@@ -21,12 +21,12 @@ public class BusquedaPropiedadSteps {
         this.context = context;
     }
 
-    @Cuando("selecciona la operación {string}")
+    @When("selecciona la operación {string}")
     public void seleccionaLaOperacion(String operacion) {
         new HomePage(context.getDriver()).seleccionarOperacion(operacion);
     }
 
-    @Cuando("filtra por tipo {string}, región {string} y comuna {string}")
+    @When("filtra por tipo {string}, región {string} y comuna {string}")
     public void filtraPorTipoRegionYComuna(String tipo, String region, String comuna) {
         new HomePage(context.getDriver())
                 .seleccionarTipo(tipo)
@@ -34,12 +34,12 @@ public class BusquedaPropiedadSteps {
                 .seleccionarComuna(comuna);
     }
 
-    @Cuando("presiona Buscar")
+    @When("presiona Buscar")
     public void presionaBuscar() {
         new HomePage(context.getDriver()).buscar();
     }
 
-    @Entonces("ve el listado {string} con al menos {int} resultado(s)")
+    @Then("ve el listado {string} con al menos {int} resultado(s)")
     public void veElListadoConAlMenosResultados(String titulo, int minimo) {
         ResultadosPage resultados = new ResultadosPage(context.getDriver());
         List<TarjetaPropiedad> tarjetas = resultados.obtenerTarjetas();
@@ -51,7 +51,7 @@ public class BusquedaPropiedadSteps {
         soft.assertAll();
     }
 
-    @Entonces("todas las propiedades del listado están en la comuna {string}")
+    @Then("todas las propiedades del listado están en la comuna {string}")
     public void todasLasPropiedadesEstanEnLaComuna(String comuna) {
         List<TarjetaPropiedad> tarjetas = new ResultadosPage(context.getDriver()).obtenerTarjetas();
         String comunaNormalizada = TextUtils.normalizar(comuna);
