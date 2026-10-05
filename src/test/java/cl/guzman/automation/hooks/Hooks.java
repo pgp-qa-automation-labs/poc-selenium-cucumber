@@ -32,7 +32,7 @@ import java.util.Set;
 public class Hooks {
 
     private static final Logger LOG = LoggerFactory.getLogger(Hooks.class);
-    private static final Set<String> TAGS_SIMULACION = Set.of("@ui-cambiada", "@ui-rota", "@api-caida");
+    private static final Set<String> TAGS_SIMULACION = Set.of("@ui-cambiada", "@ui-rota", "@api-caida", "@uf-caida");
     private static final Path FUENTES = Path.of("src", "main", "java");
 
     @BeforeAll
@@ -78,6 +78,13 @@ public class Hooks {
     @Before(value = "@api-caida", order = 1)
     public void simularApiCaida() {
         String patron = ConfigReader.get().app().apiUrl() + "/api/properties*";
+        LOG.info("Simulación: bloqueando en el navegador las peticiones a {}", patron);
+        UiChangeSimulator.bloquearPeticiones(DriverManager.getDriver(), List.of(patron));
+    }
+
+    @Before(value = "@uf-caida", order = 1)
+    public void simularUfNoDisponible() {
+        String patron = ConfigReader.get().app().apiUrl() + "/api/uf*";
         LOG.info("Simulación: bloqueando en el navegador las peticiones a {}", patron);
         UiChangeSimulator.bloquearPeticiones(DriverManager.getDriver(), List.of(patron));
     }

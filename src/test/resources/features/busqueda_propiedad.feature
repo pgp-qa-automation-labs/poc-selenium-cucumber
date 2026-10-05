@@ -16,3 +16,4 @@ Característica: Búsqueda de propiedades
     Cuando abre el detalle de la primera propiedad del listado
     Entonces el detalle muestra el mismo título, ubicación, precio y código de la propiedad seleccionada
     Y el detalle muestra las características "Dormitorios" y "Baños"
+    Y el detalle muestra la conversión a pesos según el valor de la UF del día

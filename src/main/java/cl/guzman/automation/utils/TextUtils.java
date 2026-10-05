@@ -1,5 +1,6 @@
 package cl.guzman.automation.utils;
 
+import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.Locale;
 
@@ -22,6 +23,18 @@ public final class TextUtils {
                 .replaceAll("[\\p{So}\\p{Cs}\\uFE0F]", "")
                 .replaceAll("\\s+", " ")
                 .trim();
+    }
+
+    /**
+     * Convierte un número en formato chileno ("41.098,15", "$ 238.287.074") a BigDecimal.
+     * Los puntos son separadores de miles y la coma es el separador decimal.
+     */
+    public static BigDecimal numeroChileno(String texto) {
+        String numero = texto == null ? "" : texto.replaceAll("[^0-9.,]", "").replace(".", "").replace(',', '.');
+        if (numero.isEmpty()) {
+            throw new IllegalArgumentException("No hay un número en el texto: '" + texto + "'");
+        }
+        return new BigDecimal(numero);
     }
 
     /**

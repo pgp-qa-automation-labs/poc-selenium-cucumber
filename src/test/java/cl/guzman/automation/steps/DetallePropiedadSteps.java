@@ -5,16 +5,53 @@ import cl.guzman.automation.context.TestContext;
 import cl.guzman.automation.model.Propiedad;
 import cl.guzman.automation.pages.DetallePropiedadPage;
 import cl.guzman.automation.pages.ResultadosPage;
+import cl.guzman.automation.utils.TextUtils;
 import io.cucumber.java.es.Cuando;
 import io.cucumber.java.es.Entonces;
 import org.assertj.core.api.SoftAssertions;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 public class DetallePropiedadSteps {
+
+    // Rango razonable para la UF (CLP): detecta valores vacíos, en cero o mal formateados sin atarse al valor del día
+    private static final BigDecimal UF_MINIMA = new BigDecimal("30000");
+    private static final BigDecimal UF_MAXIMA = new BigDecimal("60000");
+    // La página redondea el monto en pesos; se acepta una diferencia de hasta 0,5 %
+    private static final BigDecimal TOLERANCIA_CONVERSION = new BigDecimal("0.005");
 
     private final TestContext context;
 
     public DetallePropiedadSteps(TestContext context) {
         this.context = context;
+    }
+
+    @Entonces("el detalle muestra la conversión a pesos según el valor de la UF del día")
+    public void elDetalleMuestraLaConversionAPesos() {
+        DetallePropiedadPage detalle = new DetallePropiedadPage(context.getDriver());
+        String precio = detalle.obtenerPrecio();
+        assertThat(precio)
+                .as("El escenario requiere una propiedad con precio en UF (precio mostrado: '%s')", precio)
+                .startsWith("UF");
+
+        BigDecimal precioUf = TextUtils.numeroChileno(precio);
+        DetallePropiedadPage.ConversionUf conversion = detalle.obtenerConversionUf();
+        BigDecimal esperadoClp = precioUf.multiply(conversion.valorUf());
+        BigDecimal diferencia = conversion.montoClp().subtract(esperadoClp).abs()
+                .divide(esperadoClp, 6, RoundingMode.HALF_UP);
+
+        SoftAssertions soft = new SoftAssertions();
+        soft.assertThat(conversion.valorUf())
+                .as("Valor de la UF del día mostrado ('%s')", conversion.textoUf())
+                .isBetween(UF_MINIMA, UF_MAXIMA);
+        soft.assertThat(diferencia)
+                .as("Conversión a pesos: %s × UF %s debería ≈ %s, la página muestra '%s'",
+                        precioUf, conversion.valorUf(), esperadoClp.setScale(0, RoundingMode.HALF_UP), conversion.textoClp())
+                .isLessThanOrEqualTo(TOLERANCIA_CONVERSION);
+        soft.assertAll();
     }
 
     @Cuando("abre el detalle de la primera propiedad del listado")

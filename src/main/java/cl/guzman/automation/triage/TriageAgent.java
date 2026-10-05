@@ -47,8 +47,11 @@ public class TriageAgent {
 
             Cómo investigar:
             - Empieza por lo que ya tienes (error y captura). Usa las herramientas solo cuando aporten evidencia nueva.
-            - Si la página no muestra datos o muestra errores, revisa la consola del navegador y consulta la API para
-              distinguir un backend caído de un problema del front.
+            - Si a la página le faltan datos, revisa las peticiones de red del navegador: muestran lo que el navegador
+              recibió en el momento del fallo. Una consulta posterior a la API puede responder bien aunque la falla haya
+              sido real (fallas intermitentes, dependencias externas lentas, bloqueos de red), y el front puede ocultar
+              esos errores sin escribir nada en la consola.
+            - Usa la consulta directa a la API para saber si el backend responde AHORA; contrástala con la red del navegador.
             - Si el self-healing rechazó una reparación, su razón es una pista fuerte sobre un cambio de la UI.
             - Distingue con cuidado entre un defecto de la aplicación y un problema de la automatización.
             - No inventes hechos: cada evidencia debe venir de lo que viste o de lo que devolvió una herramienta.
@@ -96,6 +99,7 @@ public class TriageAgent {
                     // Sin parámetros: su schema vacío no pasa la validación local del SDK, pero es válido para la API
                     .addTool(LeerHtml.class, JsonSchemaLocalValidation.NO)
                     .addTool(LeerConsola.class, JsonSchemaLocalValidation.NO)
+                    .addTool(LeerRed.class, JsonSchemaLocalValidation.NO)
                     .addTool(ConsultarApi.class)
                     .addTool(RegistrarDiagnostico.class)
                     .addUserMessageOfBetaContentBlockParams(contenido)

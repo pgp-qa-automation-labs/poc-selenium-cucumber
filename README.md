@@ -77,6 +77,7 @@ Cuando un escenario falla, un agente de Claude investiga la causa **con el naveg
 |---|---|
 | `LeerHtml` | HTML visible actual (mismo formato reducido que el self-healing) |
 | `LeerConsola` | Errores de JavaScript y peticiones fallidas en la consola del navegador |
+| `LeerRed` | Peticiones de datos (fetch/XHR) que hizo el navegador y lo que recibió en ese momento (código HTTP o error de red). Detecta fallas intermitentes que una consulta posterior a la API ya no reproduce y errores que el front oculta |
 | `ConsultarApi` | `GET` a la API del ambiente (solo rutas `/api/...`) para saber si el backend responde |
 | `RegistrarDiagnostico` | Cierra la investigación con el diagnóstico estructurado |
 
@@ -89,6 +90,7 @@ El diagnóstico (categoría, severidad, área responsable, causa probable, evide
 | Demo | Simulación | Diagnóstico esperado |
 |---|---|---|
 | `@api-caida` (`@manual`) | El navegador bloquea las llamadas a `/api/properties` | `AMBIENTE_NO_DISPONIBLE`, infraestructura |
+| `@uf-caida` (`@manual`) | El navegador bloquea las llamadas a `/api/uf` (valor de la UF) | `AMBIENTE_NO_DISPONIBLE`, infraestructura: el front oculta la conversión a pesos sin avisar |
 | `@ui-rota` (`@manual`) | El botón Buscar desaparece | `BUG_APLICACION`, frontend |
 
 ```bash

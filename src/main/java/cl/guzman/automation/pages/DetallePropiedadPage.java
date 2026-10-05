@@ -7,7 +7,10 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 
+import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Detalle de una propiedad (/propiedad/{id}).
@@ -27,6 +30,13 @@ public class DetallePropiedadPage extends BasePage {
     private static final Locator PRECIOS = Locator.ofMany(
             By.cssSelector("span.detalles-precio"),
             "Precio principal de la propiedad (ej. 'UF 5.798') en la página de detalle; existe una versión mobile y otra desktop");
+    private static final Locator CONVERSION_CLP = Locator.ofMany(
+            By.cssSelector("span.detalles-precio-clp"),
+            "Conversión aproximada del precio a pesos chilenos (ej. '≈ $ 238.287.074 CLP') junto al precio en UF; existe versión mobile y desktop");
+    private static final Locator UF_DEL_DIA = Locator.ofMany(
+            By.cssSelector("span.detalles-uf-valor"),
+            "Valor de la UF del día usado en la conversión (ej. 'UF hoy: $ 41.098,15'); existe versión mobile y desktop");
+    private static final Pattern MONTO_CLP = Pattern.compile("≈\\s*\\$\\s*([\\d.]+)");
     private static final Locator CARACTERISTICAS = Locator.ofMany(
             By.cssSelector(".detalles-item"),
             "Ítems de características de la propiedad (dormitorios, baños, superficies), cada uno con etiqueta y valor");
@@ -51,7 +61,34 @@ public class DetallePropiedadPage extends BasePage {
     }
 
     public String obtenerPrecio() {
-        return conHealing(PRECIOS, by -> {
+        return textoVisible(PRECIOS);
+    }
+
+    /**
+     * Conversión a pesos que muestra el detalle para precios en UF, con el valor de la UF usado.
+     */
+    public ConversionUf obtenerConversionUf() {
+        String textoClp = textoVisible(CONVERSION_CLP);
+        String textoUf = textoVisible(UF_DEL_DIA);
+        Matcher monto = MONTO_CLP.matcher(textoClp);
+        if (!monto.find()) {
+            throw new IllegalStateException("No se reconoce el monto en pesos en el texto: '" + textoClp + "'");
+        }
+        return new ConversionUf(TextUtils.numeroChileno(monto.group(1)), TextUtils.numeroChileno(textoUf), textoClp, textoUf);
+    }
+
+    /**
+     * @param montoClp monto aproximado en pesos que muestra la página
+     * @param valorUf  valor de la UF del día que muestra la página
+     */
+    public record ConversionUf(BigDecimal montoClp, BigDecimal valorUf, String textoClp, String textoUf) {
+    }
+
+    /**
+     * Texto del primer elemento visible del locator (hay versiones mobile y desktop del mismo dato).
+     */
+    private String textoVisible(Locator locator) {
+        return conHealing(locator, by -> {
             wait.until(d -> d.findElements(by).stream().anyMatch(WebElement::isDisplayed));
             return driver.findElements(by).stream()
                     .filter(WebElement::isDisplayed)

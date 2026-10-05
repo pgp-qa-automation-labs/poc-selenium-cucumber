@@ -9,6 +9,18 @@ Característica: Triage de fallos con IA
   # de propiedades, como si el backend estuviera caído. El triage debería identificar el problema de backend.
   # El nombre es neutral a propósito: el agente de triage no debe deducir la causa por el título.
   #   mvn test -Dcucumber.filter.tags=@api-caida
+  # Escenario de demostración: se espera que FALLE. El navegador bloquea la consulta del valor de la UF
+  # (/api/uf), como cuando el proveedor externo del backend no responde. El triage debería atribuirlo al backend.
+  #   mvn test -Dcucumber.filter.tags=@uf-caida
+  @uf-caida @manual
+  Escenario: Revisar el precio en pesos de un departamento en venta en Ñuñoa
+    Dado que el usuario está en el home de Guzmán Corretaje
+    Cuando selecciona la operación "Comprar"
+    Y filtra por tipo "Departamento", región "Región Metropolitana" y comuna "Ñuñoa"
+    Y presiona Buscar
+    Y abre el detalle de la primera propiedad del listado
+    Entonces el detalle muestra la conversión a pesos según el valor de la UF del día
+
   @api-caida @manual
   Escenario: Consultar el listado de departamentos en venta en Ñuñoa
     Dado que el usuario está en el home de Guzmán Corretaje
