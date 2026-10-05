@@ -62,7 +62,10 @@ public final class ConfigReader {
         config.put("env", env);
         config.putObject("secrets")
                 .put("anthropicApiKey", sysEnv.getOrDefault("ANTHROPIC_API_KEY", ""))
-                .put("githubToken", sysEnv.getOrDefault("GITHUB_TOKEN", ""));
+                .put("githubToken", sysEnv.getOrDefault("GITHUB_TOKEN", ""))
+                .put("jiraEmail", sysEnv.getOrDefault("JIRA_EMAIL", ""))
+                .put("jiraApiToken", sysEnv.getOrDefault("JIRA_API_TOKEN", ""))
+                .put("azureDevOpsPat", sysEnv.getOrDefault("AZURE_DEVOPS_PAT", ""));
 
         try {
             return MAPPER.treeToValue(config, EnvironmentConfig.class);

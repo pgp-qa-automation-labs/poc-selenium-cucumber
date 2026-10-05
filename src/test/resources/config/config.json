@@ -38,6 +38,12 @@
     "tracker": "github",
     "dryRun": true,
     "minConfidence": 60,
-    "githubRepository": "pgp-qa-automation-labs/poc-selenium-cucumber"
+    "githubRepository": "pgp-qa-automation-labs/poc-selenium-cucumber",
+    "jiraBaseUrl": "",
+    "jiraProjectKey": "",
+    "jiraIssueType": "Bug",
+    "azureOrgUrl": "",
+    "azureProject": "",
+    "azureWorkItemType": "Bug"
   }
 }

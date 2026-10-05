@@ -98,15 +98,31 @@ mvn test -Dcucumber.filter.tags=@api-caida
 ```
 
 ### Publicación de issues
-Al terminar la ejecución, cada diagnóstico se publica como issue en el gestor configurado (`config.json` → `issues`). Hoy: **GitHub Issues**; el diseño (`IssueTracker`) permite agregar Jira y Azure DevOps sin tocar el triage.
+Al terminar la ejecución, cada diagnóstico se publica como issue en el gestor elegido. Los tres gestores reciben **los mismos datos** (`ContenidoIssue`), cada uno en su formato:
 
-- **Dry-run (por defecto en local y en PRs):** no envía nada; escribe en `target/issues/` el payload exacto (`issue-<huella>.json`) y su vista previa (`issue-<huella>.md`) para revisar qué datos se enviarían.
+| Gestor | Se crea | Formato | Sin duplicados con |
+|---|---|---|---|
+| **GitHub Issues** (por defecto) | Issue con etiquetas | Markdown | Huella oculta en el cuerpo |
+| **Jira Cloud** | Issue tipo `Bug` (configurable) | ADF (Atlassian Document Format), API v3 | Etiqueta `triage-huella-<huella>` (JQL) |
+| **Azure DevOps** | Work item `Bug` con *Repro Steps* y severidad | HTML, JSON Patch, API 7.1 | Tag `triage-huella-<huella>` (WIQL) |
+
+Al lanzar el workflow a mano, la lista **Destino de los issues** permite elegir `github`, `jira`, `azuredevops`, `todos` o `ninguno` (solo vista previa de los tres). La etapa `3 · Issues de triage` tiene **un paso por gestor**; los no elegidos aparecen omitidos. En ejecuciones automáticas el destino es la variable del repo `ISSUES_DESTINO` o, si no existe, `github`.
+
+| Gestor | Variables del repo (*Settings → Secrets and variables → Actions → Variables*) | Secretos |
+|---|---|---|
+| GitHub | — | — (usa el `GITHUB_TOKEN` del workflow) |
+| Jira | `JIRA_BASE_URL` (ej. `https://miempresa.atlassian.net`), `JIRA_PROJECT_KEY` | `JIRA_EMAIL`, `JIRA_API_TOKEN` |
+| Azure DevOps | `AZURE_DEVOPS_ORG_URL` (ej. `https://dev.azure.com/miempresa`), `AZURE_DEVOPS_PROJECT` | `AZURE_DEVOPS_PAT` (Work Items: lectura y escritura) |
+
+**Sin credenciales, el paso no falla:** genera solo la vista previa y el resumen indica qué falta configurar.
+
+- **Dry-run (por defecto en local y en PRs):** no envía nada; escribe en `target/issues/<gestor>/` el payload exacto (`issue-<huella>.json`) y su vista previa (`issue-<huella>.md`) para revisar qué datos se enviarían. Para otro gestor en local: `-Dissues.tracker=jira`.
 - **Envío real:** en la etapa `3 · Issues de triage` de GitHub Actions (fuera de PRs), con el `GITHUB_TOKEN` temporal del workflow (permiso `issues: write`). Se puede ejecutar aparte sobre un reporte existente:
   ```bash
   mvn test-compile exec:java -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues -Dexec.args=target/triage/triage-report.json
   ```
 - **Sin duplicados:** cada fallo tiene una huella (escenario + paso + categoría + ambiente). Si ya hay un issue abierto con esa huella, se agrega un comentario en vez de abrir otro.
-- **Etiquetas:** `triage-ia`, `severidad:*`, `categoria:*`, `area:*` y `demo` cuando el fallo viene de una simulación.
+- **Etiquetas:** `triage-ia`, `severidad:*`, `categoria:*`, `area:*` y `demo` cuando el fallo viene de una simulación (en Jira y Azure DevOps con guion: `severidad-alta`).
 - **Qué se envía:** título, severidad, categoría, área, confianza, causa probable, evidencias, acción recomendada, escenario, paso, URL, ambiente, rama/commit y enlace a la ejecución. **No se envía:** la captura, el HTML completo, la consola ni ningún secreto (la captura queda en los artefactos del run enlazado).
 - Se omiten diagnósticos `INDETERMINADO` o con confianza menor a `issues.minConfidence`.
 
@@ -120,7 +136,7 @@ src/main/java/cl/guzman/automation/
 ├── driver/        DriverFactory y DriverManager (ThreadLocal)
 ├── healing/       Locator, HealingEngine, ClaudeLocatorAdvisor, DomSnapshot, HealingReport
 ├── triage/        TriageAgent, herramientas del agente, Diagnostico, TriageReport
-├── issues/        IssueTracker, GitHubIssueTracker, IssuePublisher (publicación de diagnósticos)
+├── issues/        IssueTracker y sus conectores (GitHub, Jira, Azure DevOps), ContenidoIssue, IssuePublisher
 ├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage
 ├── components/    TarjetaPropiedad
 ├── model/         Propiedad

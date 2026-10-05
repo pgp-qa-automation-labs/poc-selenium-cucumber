@@ -46,37 +46,43 @@ public final class IssuePublisher {
             resultados.add(tracker.publicar(d, contexto, cfg.dryRun()));
         }
         resultados.forEach(r -> LOG.info("Issues: {} - {} {}", r.accion(), r.titulo(), r.url() == null ? "" : r.url()));
-        escribir(resultados, tracker.nombre(), cfg.dryRun());
+        escribir(resultados, cfg.tracker().toLowerCase(Locale.ROOT), tracker.nombre(), cfg.dryRun());
         return resultados;
     }
 
     private static IssueTracker crearTracker(EnvironmentConfig.Issues cfg, EnvironmentConfig.Secrets secrets) {
         return switch (cfg.tracker().toLowerCase(Locale.ROOT)) {
             case "github" -> new GitHubIssueTracker(cfg.githubRepository(), secrets.githubToken());
+            case "jira" -> new JiraIssueTracker(cfg, secrets);
+            case "azuredevops" -> new AzureDevOpsIssueTracker(cfg, secrets);
             default -> throw new IllegalArgumentException("Gestor de issues no soportado: " + cfg.tracker()
-                    + " (disponibles: github)");
+                    + " (disponibles: github, jira, azuredevops)");
         };
     }
 
-    private static void escribir(List<ResultadoIssue> resultados, String tracker, boolean dryRun) {
-        StringBuilder md = new StringBuilder("# Issues\n\nDestino: ").append(tracker)
-                .append(dryRun ? " — **dry-run** (no se envió nada; abajo, lo que se habría enviado)" : "").append("\n\n")
+    /**
+     * Cada gestor escribe en su propia carpeta (target/issues/<gestor>/) para poder publicar en varios en la misma ejecución.
+     */
+    private static void escribir(List<ResultadoIssue> resultados, String carpeta, String tracker, boolean dryRun) {
+        Path directorio = DIRECTORIO.resolve(carpeta);
+        StringBuilder md = new StringBuilder("# Issues · ").append(tracker)
+                .append("\n\n").append(dryRun ? "**Dry-run:** no se envió nada; la vista previa y el payload quedan en los artefactos.\n\n" : "")
                 .append("| Acción | Título | Enlace | Detalle |\n|---|---|---|---|\n");
         resultados.forEach(r -> md.append("| ").append(r.accion()).append(" | ").append(r.titulo())
                 .append(" | ").append(r.url() == null ? "—" : r.url()).append(" | ").append(r.detalle()).append(" |\n"));
         try {
-            Files.createDirectories(DIRECTORIO);
+            Files.createDirectories(directorio);
             for (ResultadoIssue r : resultados) {
                 if (r.payload() != null) {
-                    Files.writeString(DIRECTORIO.resolve("issue-" + r.huella() + ".json"), r.payload(), StandardCharsets.UTF_8);
+                    Files.writeString(directorio.resolve("issue-" + r.huella() + ".json"), r.payload(), StandardCharsets.UTF_8);
                 }
                 if (r.vistaPrevia() != null) {
-                    Files.writeString(DIRECTORIO.resolve("issue-" + r.huella() + ".md"), r.vistaPrevia(), StandardCharsets.UTF_8);
+                    Files.writeString(directorio.resolve("issue-" + r.huella() + ".md"), r.vistaPrevia(), StandardCharsets.UTF_8);
                 }
             }
-            Files.writeString(DIRECTORIO.resolve("issues-report.md"), md.toString(), StandardCharsets.UTF_8);
+            Files.writeString(directorio.resolve("issues-report.md"), md.toString(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new IllegalStateException("No se pudo escribir el reporte de issues en " + DIRECTORIO, e);
+            throw new IllegalStateException("No se pudo escribir el reporte de issues en " + directorio, e);
         }
     }
 }

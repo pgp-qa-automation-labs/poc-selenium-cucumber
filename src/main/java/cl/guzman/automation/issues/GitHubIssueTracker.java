@@ -60,8 +60,8 @@ public class GitHubIssueTracker implements IssueTracker {
                     "Modo dry-run: no se envió nada a GitHub", payload, vista);
         }
         if (token == null || token.isBlank()) {
-            return new ResultadoIssue(ResultadoIssue.Accion.OMITIDO, huella, titulo(d), null,
-                    "Falta GITHUB_TOKEN para publicar en GitHub", payload, vista);
+            return new ResultadoIssue(ResultadoIssue.Accion.SIMULADO, huella, titulo(d), null,
+                    "GitHub no está configurado (falta GITHUB_TOKEN): se generó solo la vista previa", payload, vista);
         }
 
         try {
@@ -86,7 +86,7 @@ public class GitHubIssueTracker implements IssueTracker {
     }
 
     static String titulo(Diagnostico d) {
-        return (d.simulado() ? "[Demo] " : "") + "[" + d.severidad() + "] " + d.titulo();
+        return ContenidoIssue.titulo(d);
     }
 
     static List<String> etiquetas(Diagnostico d) {

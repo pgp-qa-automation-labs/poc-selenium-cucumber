@@ -15,6 +15,11 @@ on:
         description: Expresión de tags de Cucumber (ej. @api-caida para correr una demo de triage)
         type: string
         default: not @self-healing and not @manual
+      destino_issues:
+        description: Dónde publicar los issues si el triage encuentra un problema
+        type: choice
+        options: [github, jira, azuredevops, todos, ninguno]
+        default: github
       demo_self_healing:
         description: Ejecutar también la demo de self-healing (cambios de UI simulados, ~USD 0,10)
         type: boolean
@@ -35,7 +40,10 @@ env:
   TEST_ENV: ${{ inputs.env || 'qa' }}
   ESCENARIOS: ${{ inputs.escenarios || 'not @self-healing and not @manual' }}
   # Los issues reales solo se crean fuera de PRs; dentro de un PR se genera solo la vista previa (dry-run)
-  ISSUES_DRY_RUN: ${{ github.event_name == 'pull_request' }}
+  ISSUES_DRY_RUN: ${{ github.event_name == 'pull_request' || inputs.destino_issues == 'ninguno' }}
+  # Destino de los issues: el elegido al lanzar a mano; en ejecuciones automáticas, la variable del repo ISSUES_DESTINO o github.
+  # 'ninguno' genera la vista previa de los tres gestores sin publicar nada.
+  ISSUES_DESTINO: ${{ inputs.destino_issues || vars.ISSUES_DESTINO || 'github' }}
   PR_BRANCH: self-healing/correccion-locators
 
 jobs:
@@ -253,23 +261,56 @@ jobs:
           name: reporte-regresion
           path: reporte
 
-      # En PRs queda en dry-run: genera la vista previa del issue sin publicarlo
-      - name: Publicar issues en GitHub
+      # Un paso por gestor: solo se ejecutan los elegidos en ISSUES_DESTINO (los demás aparecen omitidos).
+      # En PRs, o con destino 'ninguno', quedan en dry-run. Sin credenciales, generan solo la vista previa (no fallan).
+      - name: Publicar en GitHub Issues
+        if: contains(fromJSON('["github", "todos", "ninguno"]'), env.ISSUES_DESTINO)
         run: >
           mvn -B test-compile exec:java
           -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues
           -Dexec.args=reporte/triage/triage-report.json
           -Denv="$TEST_ENV"
+          -Dissues.tracker=github
           -Dissues.dryRun=$ISSUES_DRY_RUN
         env:
           GITHUB_TOKEN: ${{ github.token }}  # token temporal del workflow, con permiso solo sobre issues
 
+      - name: Publicar en Jira
+        # !cancelled(): se ejecuta aunque falle la publicación en otro gestor
+        if: ${{ !cancelled() && contains(fromJSON('["jira", "todos", "ninguno"]'), env.ISSUES_DESTINO) }}
+        run: >
+          mvn -B test-compile exec:java
+          -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues
+          -Dexec.args=reporte/triage/triage-report.json
+          -Denv="$TEST_ENV"
+          -Dissues.tracker=jira
+          -Dissues.dryRun=$ISSUES_DRY_RUN
+          "-Dissues.jiraBaseUrl=${{ vars.JIRA_BASE_URL }}"
+          "-Dissues.jiraProjectKey=${{ vars.JIRA_PROJECT_KEY }}"
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Publicar en Azure DevOps
+        if: ${{ !cancelled() && contains(fromJSON('["azuredevops", "todos", "ninguno"]'), env.ISSUES_DESTINO) }}
+        run: >
+          mvn -B test-compile exec:java
+          -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues
+          -Dexec.args=reporte/triage/triage-report.json
+          -Denv="$TEST_ENV"
+          -Dissues.tracker=azuredevops
+          -Dissues.dryRun=$ISSUES_DRY_RUN
+          "-Dissues.azureOrgUrl=${{ vars.AZURE_DEVOPS_ORG_URL }}"
+          "-Dissues.azureProject=${{ vars.AZURE_DEVOPS_PROJECT }}"
+        env:
+          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+
       - name: Resumen de issues
         if: always()
         run: |
-          if [ -f target/issues/issues-report.md ]; then
-            cat target/issues/issues-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for reporte in target/issues/*/issues-report.md; do
+            if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; fi
+          done
 
       - name: Publicar vista previa y payloads
         if: always()

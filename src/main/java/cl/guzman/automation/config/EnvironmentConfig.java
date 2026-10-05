@@ -61,19 +61,30 @@ public record EnvironmentConfig(
     /**
      * Publicación de los diagnósticos del triage como issues en un gestor de proyectos.
      *
-     * @param tracker          gestor destino ("github"; más adelante "jira" y "azuredevops")
-     * @param dryRun           true: no envía nada, escribe en target/issues/ el payload exacto que se enviaría
-     * @param minConfidence    confianza mínima del diagnóstico para publicarlo
-     * @param githubRepository repositorio destino en formato owner/repo
+     * @param tracker           gestor destino: "github", "jira" o "azuredevops"
+     * @param dryRun            true: no envía nada, escribe en target/issues/ el payload exacto que se enviaría
+     * @param minConfidence     confianza mínima del diagnóstico para publicarlo
+     * @param githubRepository  repositorio destino en formato owner/repo
+     * @param jiraBaseUrl       sitio de Jira Cloud, ej. https://miempresa.atlassian.net
+     * @param jiraProjectKey    clave del proyecto de Jira, ej. QA
+     * @param jiraIssueType     tipo de issue a crear en Jira
+     * @param azureOrgUrl       organización de Azure DevOps, ej. https://dev.azure.com/miempresa
+     * @param azureProject      proyecto de Azure DevOps
+     * @param azureWorkItemType tipo de work item a crear en Azure DevOps
      */
-    public record Issues(boolean enabled, String tracker, boolean dryRun, int minConfidence, String githubRepository) {
+    public record Issues(boolean enabled, String tracker, boolean dryRun, int minConfidence, String githubRepository,
+                         String jiraBaseUrl, String jiraProjectKey, String jiraIssueType,
+                         String azureOrgUrl, String azureProject, String azureWorkItemType) {
     }
 
-    public record Secrets(String anthropicApiKey, String githubToken) {
+    public record Secrets(String anthropicApiKey, String githubToken, String jiraEmail, String jiraApiToken,
+                          String azureDevOpsPat) {
 
         @Override
         public String toString() {
-            return "Secrets[anthropicApiKey=" + enmascarar(anthropicApiKey) + ", githubToken=" + enmascarar(githubToken) + "]";
+            return "Secrets[anthropicApiKey=" + enmascarar(anthropicApiKey) + ", githubToken=" + enmascarar(githubToken)
+                    + ", jiraEmail=" + enmascarar(jiraEmail) + ", jiraApiToken=" + enmascarar(jiraApiToken)
+                    + ", azureDevOpsPat=" + enmascarar(azureDevOpsPat) + "]";
         }
 
         private static String enmascarar(String valor) {
