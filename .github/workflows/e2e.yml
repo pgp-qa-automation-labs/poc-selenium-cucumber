@@ -194,6 +194,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      pr_url: ${{ steps.pr.outputs.pr_url }}
+      gestores_tareas: ${{ steps.gestores.outputs.gestores_tareas }}
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -214,6 +217,7 @@ jobs:
           git push --force origin "$PR_BRANCH"
 
       - name: Crear o actualizar Pull Request
+        id: pr
         env:
           GH_TOKEN: ${{ github.token }}
           BASE: ${{ github.ref_name }}
@@ -227,6 +231,21 @@ jobs:
               --body-file reporte/healing/pr-body.md
             echo "PR creado: $(gh pr view "$PR_BRANCH" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
           fi
+          echo "pr_url=$(gh pr view "$PR_BRANCH" --json url -q .url)" >> "$GITHUB_OUTPUT"
+
+      # Las reparaciones también se informan como tarea de mantenimiento en Jira y Azure DevOps (si se eligieron);
+      # en GitHub no hace falta: el PR ya registra el trabajo.
+      - name: Decidir tareas de mantenimiento
+        id: gestores
+        run: |
+          case "$ISSUES_DESTINO" in
+            jira)        g='[{"id":"jira","nombre":"Jira"}]' ;;
+            azuredevops) g='[{"id":"azuredevops","nombre":"Azure DevOps"}]' ;;
+            todos|ninguno) g='[{"id":"jira","nombre":"Jira"},{"id":"azuredevops","nombre":"Azure DevOps"}]' ;;
+            *)           g='[]' ;;
+          esac
+          echo "gestores_tareas=$g" >> "$GITHUB_OUTPUT"
+          echo "Tareas de mantenimiento en: $g"
 
   triage:
     name: 3 · Evaluación de triage
@@ -370,5 +389,62 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: issues-${{ matrix.id }}
+          path: target/issues/
+          if-no-files-found: ignore
+
+  tareas:
+    name: 4 · Tarea en ${{ matrix.nombre }}
+    needs: pr-correccion
+    if: needs.pr-correccion.result == 'success' && needs.pr-correccion.outputs.gestores_tareas != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.pr-correccion.outputs.gestores_tareas || '[]') }}
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Preparar entorno
+        uses: ./.github/actions/preparar-entorno
+
+      - name: Descargar reporte de self-healing
+        uses: actions/download-artifact@v4
+        with:
+          name: reporte-regresion
+          path: reporte
+
+      # Sin credenciales del gestor, solo genera la vista previa (no falla)
+      - name: Publicar tarea en ${{ matrix.nombre }}
+        run: >
+          mvn -B test-compile exec:java
+          -Dexec.mainClass=cl.guzman.automation.issues.PublicarTareas
+          -Dexec.args=reporte/healing/healing-report.json
+          -Denv="$TEST_ENV"
+          -Dissues.tracker=${{ matrix.id }}
+          -Dissues.dryRun=$ISSUES_DRY_RUN
+          "-Dissues.jiraBaseUrl=${{ vars.JIRA_BASE_URL }}"
+          "-Dissues.jiraProjectKey=${{ vars.JIRA_PROJECT_KEY }}"
+          "-Dissues.azureOrgUrl=${{ vars.AZURE_DEVOPS_ORG_URL }}"
+          "-Dissues.azureProject=${{ vars.AZURE_DEVOPS_PROJECT }}"
+        env:
+          PR_URL: ${{ needs.pr-correccion.outputs.pr_url }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+
+      - name: Resumen
+        if: always()
+        run: |
+          for reporte in target/issues/*/issues-report.md; do
+            if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: Publicar vista previa y payloads
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tareas-${{ matrix.id }}
           path: target/issues/
           if-no-files-found: ignore

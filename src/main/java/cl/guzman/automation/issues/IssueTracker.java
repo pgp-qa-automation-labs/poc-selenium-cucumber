@@ -19,4 +19,13 @@ public interface IssueTracker {
      * @param captura captura de pantalla del fallo (puede ser null); cada gestor la adjunta o la enlaza
      */
     ResultadoIssue publicar(Diagnostico diagnostico, ContextoEjecucion contexto, Path captura, boolean dryRun);
+
+    /**
+     * Crea una tarea de mantenimiento por una reparación del self-healing, o comenta la existente.
+     * Por defecto no aplica: en GitHub el PR de corrección ya registra el trabajo.
+     */
+    default ResultadoIssue publicarTarea(TareaReparacion tarea, ContextoEjecucion contexto, boolean dryRun) {
+        return new ResultadoIssue(ResultadoIssue.Accion.OMITIDO, tarea.huella(), tarea.titulo(), tarea.prUrl(),
+                "No aplica en " + nombre() + ": el PR de corrección ya registra el trabajo", null, null);
+    }
 }

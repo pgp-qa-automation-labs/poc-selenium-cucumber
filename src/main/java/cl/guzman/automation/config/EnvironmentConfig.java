@@ -80,10 +80,13 @@ public record EnvironmentConfig(
      * @param azureOrgUrl       organización de Azure DevOps, ej. https://dev.azure.com/miempresa
      * @param azureProject      proyecto de Azure DevOps
      * @param azureWorkItemType tipo de work item a crear en Azure DevOps
+     * @param jiraTaskType      tipo de issue de Jira para las tareas de mantenimiento del self-healing
+     * @param azureTaskType     tipo de work item de Azure DevOps para las tareas de mantenimiento del self-healing
      */
     public record Issues(boolean enabled, String tracker, boolean dryRun, int minConfidence, String githubRepository,
                          String jiraBaseUrl, String jiraProjectKey, String jiraIssueType,
-                         String azureOrgUrl, String azureProject, String azureWorkItemType) {
+                         String azureOrgUrl, String azureProject, String azureWorkItemType,
+                         String jiraTaskType, String azureTaskType) {
     }
 
     public record Secrets(String anthropicApiKey, String githubToken, String jiraEmail, String jiraApiToken,

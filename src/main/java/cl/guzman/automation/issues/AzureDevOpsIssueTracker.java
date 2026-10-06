@@ -27,12 +27,14 @@ public class AzureDevOpsIssueTracker implements IssueTracker {
     private final String organizacion;
     private final String proyecto;
     private final String tipoWorkItem;
+    private final String tipoTarea;
     private final String pat;
 
     public AzureDevOpsIssueTracker(EnvironmentConfig.Issues cfg, EnvironmentConfig.Secrets secrets) {
         this.organizacion = cfg.azureOrgUrl() == null ? "" : cfg.azureOrgUrl().replaceAll("/+$", "");
         this.proyecto = cfg.azureProject();
         this.tipoWorkItem = ClienteHttp.vacio(cfg.azureWorkItemType()) ? "Bug" : cfg.azureWorkItemType();
+        this.tipoTarea = ClienteHttp.vacio(cfg.azureTaskType()) ? "Task" : cfg.azureTaskType();
         this.pat = secrets.azureDevOpsPat();
     }
 
@@ -100,6 +102,65 @@ public class AzureDevOpsIssueTracker implements IssueTracker {
             Thread.currentThread().interrupt();
             return new ResultadoIssue(ResultadoIssue.Accion.ERROR, huella, titulo, null, "Interrumpido", payload, vista);
         }
+    }
+
+    @Override
+    public ResultadoIssue publicarTarea(TareaReparacion tarea, ContextoEjecucion contexto, boolean dryRun) {
+        List<String> tags = List.of("self-healing", "mantenimiento-test", "area-qa", ContenidoIssue.etiquetaHuella(tarea.huella()));
+        String descripcion = htmlTarea(tarea, contexto);
+        List<Map<String, Object>> operaciones = List.of(
+                campo("System.Title", tarea.titulo()),
+                campo("System.Description", descripcion),
+                campo("System.Tags", String.join("; ", tags)));
+        String payload = ClienteHttp.json(operaciones);
+        String vista = "# " + tarea.titulo() + "\n\n**Azure DevOps:** work item tipo `" + tipoTarea + "` · tags: "
+                + String.join("; ", tags) + "\n\n**Description (HTML):**\n\n" + descripcion + "\n";
+
+        List<String> faltantes = faltantes();
+        if (dryRun || !faltantes.isEmpty()) {
+            String motivo = dryRun ? "Modo dry-run: no se envió nada a Azure DevOps"
+                    : "Azure DevOps no está configurado (falta " + String.join(", ", faltantes) + "): se generó solo la vista previa";
+            return new ResultadoIssue(ResultadoIssue.Accion.SIMULADO, tarea.huella(), tarea.titulo(), null, motivo, payload, vista);
+        }
+        ClienteHttp http = ClienteHttp.basic("", pat);
+        String base = organizacion + "/" + codificar(proyecto);
+        try {
+            Integer existente = buscarAbierto(http, base, tarea.huella());
+            if (existente != null) {
+                String comentario = ClienteHttp.json(Map.of("text", "<p>🔁 El self-healing volvió a reparar este locator ("
+                        + escapar(contexto.origen()) + ", rama " + escapar(contexto.rama()) + "). La corrección sigue pendiente de aprobación.</p>"));
+                http.enviar("POST", base + "/_apis/wit/workItems/" + existente + "/comments?api-version=7.1-preview.4",
+                        comentario, "application/json");
+                return new ResultadoIssue(ResultadoIssue.Accion.COMENTADO, tarea.huella(), tarea.titulo(),
+                        base + "/_workitems/edit/" + existente, "La tarea ya estaba abierta: se agregó un comentario", comentario, vista);
+            }
+            JsonNode creado = http.enviar("POST", base + "/_apis/wit/workitems/$" + codificar(tipoTarea) + "?" + API_VERSION,
+                    payload, "application/json-patch+json");
+            int id = creado.path("id").asInt();
+            return new ResultadoIssue(ResultadoIssue.Accion.CREADO, tarea.huella(), tarea.titulo(), base + "/_workitems/edit/" + id,
+                    "Tarea #" + id + " creada", payload, vista);
+        } catch (IOException | RuntimeException e) {
+            return new ResultadoIssue(ResultadoIssue.Accion.ERROR, tarea.huella(), tarea.titulo(), null, e.getMessage(), payload, vista);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new ResultadoIssue(ResultadoIssue.Accion.ERROR, tarea.huella(), tarea.titulo(), null, "Interrumpido", payload, vista);
+        }
+    }
+
+    private static String htmlTarea(TareaReparacion t, ContextoEjecucion c) {
+        return "<p><i>" + escapar(TareaReparacion.AVISO) + "</i></p>"
+                + "<h3>Cambio detectado</h3><table>"
+                + "<tr><td><b>Elemento</b></td><td>" + escapar(t.descripcion()) + "</td></tr>"
+                + "<tr><td><b>Page Object</b></td><td>" + escapar(t.pagina()) + "</td></tr>"
+                + "<tr><td><b>Locator anterior</b></td><td><code>" + escapar(t.locatorOriginal()) + "</code></td></tr>"
+                + "<tr><td><b>Locator nuevo</b></td><td><code>" + escapar(t.locatorNuevo()) + "</code></td></tr>"
+                + "<tr><td><b>Confianza de la IA</b></td><td>" + t.confianza() + "%</td></tr>"
+                + "<tr><td><b>Ambiente</b></td><td>" + escapar(t.ambiente()) + "</td></tr></table>"
+                + "<h3>Razón de la IA</h3><p>" + escapar(t.razon()) + "</p>"
+                + "<h3>Qué hacer</h3><ul><li>Revisar y aprobar el PR con la corrección"
+                + (t.prUrl() == null ? "" : ": <a href=\"" + t.prUrl() + "\">" + escapar(t.prUrl()) + "</a>") + "</li>"
+                + "<li>" + escapar(TareaReparacion.RECOMENDACION) + "</li></ul>"
+                + (c.urlEjecucion() == null ? "" : "<p><a href=\"" + c.urlEjecucion() + "\">Ver la ejecución</a></p>");
     }
 
     private List<String> faltantes() {

@@ -48,6 +48,8 @@
     "jiraIssueType": "Bug",
     "azureOrgUrl": "",
     "azureProject": "",
-    "azureWorkItemType": "Bug"
+    "azureWorkItemType": "Bug",
+    "jiraTaskType": "Task",
+    "azureTaskType": "Task"
   }
 }

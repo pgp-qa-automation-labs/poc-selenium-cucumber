@@ -25,6 +25,7 @@ public class JiraIssueTracker implements IssueTracker {
     private final String baseUrl;
     private final String proyecto;
     private final String tipoIssue;
+    private final String tipoTarea;
     private final String email;
     private final String token;
 
@@ -32,6 +33,7 @@ public class JiraIssueTracker implements IssueTracker {
         this.baseUrl = cfg.jiraBaseUrl() == null ? "" : cfg.jiraBaseUrl().replaceAll("/+$", "");
         this.proyecto = cfg.jiraProjectKey();
         this.tipoIssue = ClienteHttp.vacio(cfg.jiraIssueType()) ? "Bug" : cfg.jiraIssueType();
+        this.tipoTarea = ClienteHttp.vacio(cfg.jiraTaskType()) ? "Task" : cfg.jiraTaskType();
         this.email = secrets.jiraEmail();
         this.token = secrets.jiraApiToken();
     }
@@ -101,6 +103,73 @@ public class JiraIssueTracker implements IssueTracker {
                 Files.readAllBytes(captura));
         http.enviarBytes(baseUrl + "/rest/api/3/issue/" + clave + "/attachments", cuerpo,
                 "multipart/form-data; boundary=" + boundary, "X-Atlassian-Token", "no-check");
+    }
+
+    @Override
+    public ResultadoIssue publicarTarea(TareaReparacion tarea, ContextoEjecucion contexto, boolean dryRun) {
+        List<String> etiquetas = List.of("self-healing", "mantenimiento-test", "area-qa",
+                ContenidoIssue.etiquetaHuella(tarea.huella()));
+        Map<String, Object> campos = new LinkedHashMap<>();
+        campos.put("project", Map.of("key", ClienteHttp.vacio(proyecto) ? "<CLAVE_PROYECTO>" : proyecto));
+        campos.put("issuetype", Map.of("name", tipoTarea));
+        campos.put("summary", tarea.titulo());
+        campos.put("labels", etiquetas);
+        campos.put("description", descripcionTarea(tarea, contexto));
+        String payload = ClienteHttp.json(Map.of("fields", campos));
+        String vista = "# " + tarea.titulo() + "\n\n**Jira:** issue tipo `" + tipoTarea + "` · etiquetas: "
+                + String.join(", ", etiquetas) + "\n\n" + TareaReparacion.AVISO + "\n\n"
+                + "- Locator anterior: `" + tarea.locatorOriginal() + "`\n- Locator nuevo: `" + tarea.locatorNuevo() + "`\n"
+                + "- Confianza de la IA: " + tarea.confianza() + "%\n- Razón: " + tarea.razon() + "\n"
+                + "- PR con la corrección: " + (tarea.prUrl() == null ? "—" : tarea.prUrl()) + "\n\n" + TareaReparacion.RECOMENDACION + "\n";
+
+        List<String> faltantes = faltantes();
+        if (dryRun || !faltantes.isEmpty()) {
+            String motivo = dryRun ? "Modo dry-run: no se envió nada a Jira"
+                    : "Jira no está configurado (falta " + String.join(", ", faltantes) + "): se generó solo la vista previa";
+            return new ResultadoIssue(ResultadoIssue.Accion.SIMULADO, tarea.huella(), tarea.titulo(), null, motivo, payload, vista);
+        }
+        ClienteHttp http = ClienteHttp.basic(email, token);
+        try {
+            String existente = buscarAbierto(http, tarea.huella());
+            if (existente != null) {
+                String comentario = ClienteHttp.json(Map.of("body", adf(List.of(parrafo(texto(
+                        "🔁 El self-healing volvió a reparar este locator (" + contexto.origen() + ", rama " + contexto.rama()
+                                + "). La corrección sigue pendiente de aprobación."), enlaceEjecucion(contexto))))));
+                http.enviar("POST", baseUrl + "/rest/api/3/issue/" + existente + "/comment", comentario, "application/json");
+                return new ResultadoIssue(ResultadoIssue.Accion.COMENTADO, tarea.huella(), tarea.titulo(),
+                        baseUrl + "/browse/" + existente, "La tarea ya estaba abierta: se agregó un comentario", comentario, vista);
+            }
+            JsonNode creado = http.enviar("POST", baseUrl + "/rest/api/3/issue", payload, "application/json");
+            String clave = creado.path("key").asText();
+            return new ResultadoIssue(ResultadoIssue.Accion.CREADO, tarea.huella(), tarea.titulo(), baseUrl + "/browse/" + clave,
+                    "Tarea " + clave + " creada", payload, vista);
+        } catch (IOException | RuntimeException e) {
+            return new ResultadoIssue(ResultadoIssue.Accion.ERROR, tarea.huella(), tarea.titulo(), null, e.getMessage(), payload, vista);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new ResultadoIssue(ResultadoIssue.Accion.ERROR, tarea.huella(), tarea.titulo(), null, "Interrumpido", payload, vista);
+        }
+    }
+
+    private static Map<String, Object> descripcionTarea(TareaReparacion t, ContextoEjecucion c) {
+        List<Object> bloques = new ArrayList<>();
+        bloques.add(panel("info", parrafo(texto(TareaReparacion.AVISO))));
+        bloques.add(titulo("Cambio detectado"));
+        bloques.add(lista(List.of(
+                "Elemento: " + t.descripcion(),
+                "Page Object: " + t.pagina(),
+                "Locator anterior: " + t.locatorOriginal(),
+                "Locator nuevo: " + t.locatorNuevo(),
+                "Confianza de la IA: " + t.confianza() + "%",
+                "Ambiente: " + t.ambiente())));
+        bloques.add(titulo("Razón de la IA"));
+        bloques.add(parrafo(texto(t.razon())));
+        bloques.add(titulo("Qué hacer"));
+        bloques.add(lista(List.of(
+                "Revisar y aprobar el PR con la corrección" + (t.prUrl() == null ? "" : ": " + t.prUrl()),
+                TareaReparacion.RECOMENDACION)));
+        bloques.add(parrafo(enlaceEjecucion(c)));
+        return adf(bloques);
     }
 
     private List<String> faltantes() {

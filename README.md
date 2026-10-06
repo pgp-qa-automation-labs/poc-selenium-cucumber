@@ -184,10 +184,12 @@ flowchart TD
     GH["4 · Issue en GitHub"]
     JI["4 · Issue en Jira"]
     AZ["4 · Issue en Azure DevOps"]
+    TAR["4 · Tarea en Jira o Azure DevOps<br/>si se eligió"]
     REV(((Tú: revisar<br/>y aprobar el PR)))
     C --> REG
     C -.-> DEMO
     REG --> PR --> REV
+    PR --> TAR
     REG --> TRI
     TRI -->|"si se eligió"| GH
     TRI -->|"si se eligió"| JI
@@ -202,9 +204,23 @@ flowchart TD
 | 3 · PR de corrección | Si el self-healing reparó un selector por un cambio real | No | Abre un PR |
 | 3 · Evaluación de triage | Si algún escenario falló (aunque sea inestable) | Solo para fallos consistentes, hasta el tope | Sube las capturas a `triage-evidencias` |
 | 4 · Issue en (gestor) | Si hubo diagnósticos; una etapa por gestor elegido | No | Crea o comenta issues |
+| 4 · Tarea en (gestor) | Si se abrió el PR de corrección y se eligió Jira o Azure DevOps | No | Crea o comenta una tarea de mantenimiento |
 
 - **Cada etapa se comunica con la siguiente mediante archivos** (el paquete de evidencia y `triage-report.json`). Por eso se puede cambiar el prompt del agente, agregar un gestor o reprocesar evidencia sin tocar las pruebas.
 - **Las etapas 4 corren en paralelo,** y si una falla, las demás siguen. Las que no elegiste no aparecen.
+
+### Tareas de mantenimiento por reparaciones del self-healing
+
+Cuando el self-healing repara un locator por un cambio **real** del sitio, la prueba pasa y se abre un PR que corrige el código. No es un bug (la aplicación funciona), sino **trabajo de mantenimiento para QA**:
+
+| Destino | Qué se crea |
+|---|---|
+| GitHub | Nada adicional: el PR ya registra el trabajo |
+| Jira / Azure DevOps | Una **tarea** (*Task*, no *Bug*) con etiquetas `self-healing`, `mantenimiento-test` y `area-qa`: el locator anterior y el nuevo, la razón y la confianza de la IA, el **enlace al PR** y una recomendación para el front (agregar un atributo estable como `data-testid` para que las pruebas no dependan de clases CSS) |
+
+- **Sin duplicados:** la huella de la tarea es la página más el locator reparado; si la reparación se repite mientras el PR no se aprueba, se comenta la tarea existente.
+- **Nunca por reparaciones simuladas** (las de las demos).
+- El tipo de tarea es configurable: `issues.jiraTaskType` e `issues.azureTaskType` (por defecto `Task`).
 
 ### Rama de evidencias
 
@@ -309,7 +325,8 @@ src/main/java/cl/guzman/automation/
 ├── evidencia/     PaqueteEvidencia, RecolectorEvidencia, AgrupadorFallos
 ├── healing/       Self-healing: Locator, HealingEngine, ClaudeLocatorAdvisor, DomSnapshot, HealingReport, LocatorPatcher
 ├── triage/        TriageAgent y sus herramientas, EvaluadorTriage, EvaluarTriage, Diagnostico, TriageReport
-├── issues/        IssueTracker y conectores (GitHub, Jira, Azure DevOps), ContenidoIssue, IssuePublisher, PublicarIssues
+├── issues/        IssueTracker y conectores (GitHub, Jira, Azure DevOps), ContenidoIssue, IssuePublisher, PublicarIssues,
+│                  TareaReparacion y PublicarTareas (tareas de mantenimiento por reparaciones del self-healing)
 ├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage
 ├── components/    TarjetaPropiedad
 ├── model/         Propiedad

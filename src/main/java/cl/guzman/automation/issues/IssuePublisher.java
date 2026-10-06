@@ -55,6 +55,26 @@ public final class IssuePublisher {
         return resultados;
     }
 
+    /**
+     * Publica las tareas de mantenimiento por reparaciones reales del self-healing (en Jira y Azure DevOps;
+     * en GitHub no aplica porque el PR ya registra el trabajo). Escribe en target/issues/&lt;gestor&gt;-tareas/.
+     */
+    public static List<ResultadoIssue> publicarTareas(List<TareaReparacion> tareas, EnvironmentConfig config, Map<String, String> env) {
+        EnvironmentConfig.Issues cfg = config.issues();
+        if (cfg == null || !cfg.enabled() || tareas.isEmpty()) {
+            return List.of();
+        }
+        IssueTracker tracker = crearTracker(cfg, config.secrets());
+        ContextoEjecucion contexto = ContextoEjecucion.desde(env);
+        LOG.info("Tareas: publicando {} reparación(es) del self-healing en {}{}", tareas.size(), tracker.nombre(),
+                cfg.dryRun() ? " (dry-run)" : "");
+        List<ResultadoIssue> resultados = tareas.stream().map(t -> tracker.publicarTarea(t, contexto, cfg.dryRun())).toList();
+        resultados.forEach(r -> LOG.info("Tareas: {} - {} {}", r.accion(), r.titulo(), r.url() == null ? "" : r.url()));
+        escribir(resultados, cfg.tracker().toLowerCase(Locale.ROOT) + "-tareas", tracker.nombre() + " · tareas de mantenimiento",
+                cfg.dryRun());
+        return resultados;
+    }
+
     private static IssueTracker crearTracker(EnvironmentConfig.Issues cfg, EnvironmentConfig.Secrets secrets) {
         return switch (cfg.tracker().toLowerCase(Locale.ROOT)) {
             case "github" -> new GitHubIssueTracker(cfg.githubRepository(), secrets.githubToken());
