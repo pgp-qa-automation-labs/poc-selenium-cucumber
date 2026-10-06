@@ -20,6 +20,17 @@ Feature: Triage de fallos con IA
     And abre el detalle de la primera propiedad del listado
     Then el detalle muestra la conversión a pesos según el valor de la UF del día
 
+  # Escenario de demostración: falla SOLO en el primer intento (la API de propiedades no responde) y pasa en el
+  # reintento. Debe quedar como "inestable": sin investigación del agente ni issue.
+  #   mvn test -Dcucumber.filter.tags=@intermitente
+  @intermitente @manual
+  Scenario: Listar departamentos en venta en Ñuñoa
+    Given que el usuario está en el home de Guzmán Corretaje
+    When selecciona la operación "Comprar"
+    And filtra por tipo "Departamento", región "Región Metropolitana" y comuna "Ñuñoa"
+    And presiona Buscar
+    Then ve el listado "Propiedades en Venta" con al menos 1 resultado
+
   @api-caida @manual
   Scenario: Consultar el listado de departamentos en venta en Ñuñoa
     Given que el usuario está en el home de Guzmán Corretaje

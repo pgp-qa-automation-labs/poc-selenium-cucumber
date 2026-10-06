@@ -15,10 +15,12 @@ import com.anthropic.models.beta.messages.BetaImageBlockParam;
 import com.anthropic.models.beta.messages.BetaMessage;
 import com.anthropic.models.beta.messages.MessageCreateParams;
 import com.anthropic.models.beta.messages.ToolRunnerCreateParams;
-import org.openqa.selenium.WebDriver;
+import cl.guzman.automation.evidencia.PaqueteEvidencia;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -28,8 +30,9 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Agente que investiga por qué falló un escenario. Parte de la captura de pantalla y del error, y decide
- * por su cuenta qué más revisar (HTML, consola del navegador, API del backend) hasta registrar un diagnóstico.
+ * Agente que investiga por qué falló un escenario a partir de su paquete de evidencia. Parte de la captura y del error,
+ * y decide por su cuenta qué más revisar (HTML, consola y red del navegador, API del backend) hasta registrar un diagnóstico.
+ * No necesita el navegador: puede ejecutarse en una etapa separada del pipeline.
  */
 public class TriageAgent {
 
@@ -43,7 +46,9 @@ public class TriageAgent {
 
             Recibirás el escenario, los pasos ejecutados, el error del paso fallido, los intentos de self-healing
             (reparación automática de locators con IA) y una captura de pantalla del navegador en el momento del fallo.
-            El navegador sigue abierto en ese estado: puedes inspeccionarlo con las herramientas disponibles.
+            Con las herramientas puedes revisar la evidencia guardada en ese momento (HTML, consola y red del navegador)
+            y consultar la API del backend ahora. Si otros escenarios fallaron con la misma evidencia, se te indican:
+            el diagnóstico debe explicar la causa común.
 
             Cómo investigar:
             - Empieza por lo que ya tienes (error y captura). Usa las herramientas solo cuando aporten evidencia nueva.
@@ -73,16 +78,23 @@ public class TriageAgent {
     }
 
     /**
-     * Investiga el fallo. Nunca lanza excepciones hacia el test: si el análisis falla, devuelve vacío y lo registra en el log.
+     * Investiga un grupo de fallos con la misma causa usando la evidencia del primero.
+     * Nunca lanza excepciones: si el análisis falla, devuelve vacío y lo registra en el log.
+     *
+     * @param escenariosAfectados todos los escenarios del grupo
+     * @param huella              identificador estable del grupo (no depende de la IA)
      */
-    public Optional<Diagnostico> analizar(WebDriver driver, FalloEscenario fallo, byte[] capturaPng) {
+    public Optional<Diagnostico> analizar(PaqueteEvidencia evidencia, List<String> escenariosAfectados, String huella) {
+        FalloEscenario fallo = evidencia.fallo();
         String modelo = config.triage().model();
-        CiLog.abrirGrupo("🔎 Triage IA: " + fallo.escenario());
+        CiLog.abrirGrupo("🔎 Triage IA: " + fallo.escenario()
+                + (escenariosAfectados.size() > 1 ? " (+" + (escenariosAfectados.size() - 1) + " con la misma evidencia)" : ""));
         LOG.info("Triage: analizando el fallo de '{}' con {}...", fallo.escenario(), modelo);
-        TriageContext.iniciar(driver, config);
+        TriageContext.iniciar(evidencia, config);
         try {
+            byte[] capturaPng = Files.exists(evidencia.captura()) ? Files.readAllBytes(evidencia.captura()) : null;
             List<BetaContentBlockParam> contenido = new ArrayList<>();
-            contenido.add(BetaContentBlockParam.ofText(describir(driver, fallo)));
+            contenido.add(BetaContentBlockParam.ofText(describir(fallo, escenariosAfectados)));
             if (capturaPng != null && capturaPng.length > 0) {
                 contenido.add(BetaContentBlockParam.ofImage(BetaImageBlockParam.builder()
                         .source(BetaBase64ImageSource.builder()
@@ -128,13 +140,15 @@ public class TriageAgent {
                 LOG.warn("Triage: el agente terminó sin registrar un diagnóstico ({} iteraciones)", iteraciones);
                 return Optional.empty();
             }
-            Diagnostico diagnostico = new Diagnostico(Instant.now(), fallo.escenario(), fallo.feature(), fallo.pasoFallido(),
-                    driver.getCurrentUrl(), fallo.ambiente(), fallo.simulado(), registrado.categoria, registrado.severidad, registrado.areaResponsable,
+            Diagnostico diagnostico = new Diagnostico(Instant.now(), huella, List.copyOf(escenariosAfectados), null, null,
+                    fallo.escenario(), fallo.feature(), fallo.pasoFallido(), fallo.url(), fallo.ambiente(), fallo.simulado(), registrado.categoria, registrado.severidad, registrado.areaResponsable,
                     registrado.titulo, registrado.causaProbable,
                     registrado.evidencias == null ? List.of() : List.copyOf(registrado.evidencias),
                     registrado.accionRecomendada, registrado.confianza, modelo, iteraciones, entrada, salida);
             LOG.warn("Triage: {} ({}%) - {}", diagnostico.categoria(), diagnostico.confianza(), diagnostico.titulo());
             return Optional.of(diagnostico);
+        } catch (IOException e) {
+            LOG.error("Triage: no se pudo leer la captura de {}: {}", evidencia.directorio(), e.getMessage());
         } catch (AnthropicServiceException e) {
             LOG.error("Triage: error de la API de Anthropic ({}): {}", e.statusCode(), e.getMessage());
         } catch (AnthropicIoException e) {
@@ -148,7 +162,7 @@ public class TriageAgent {
         return Optional.empty();
     }
 
-    private String describir(WebDriver driver, FalloEscenario fallo) {
+    private String describir(FalloEscenario fallo, List<String> escenariosAfectados) {
         String pasos = fallo.pasos().stream()
                 .map(p -> "- [" + p.estado() + "] " + p.texto())
                 .collect(Collectors.joining("\n"));
@@ -176,12 +190,19 @@ public class TriageAgent {
                 %s
                 </self_healing>
 
+                <otros_escenarios_con_la_misma_evidencia>
+                %s
+                </otros_escenarios_con_la_misma_evidencia>
+
                 Se adjunta la captura de pantalla del navegador al momento del fallo.
                 """.formatted(
                 fallo.escenario(), fallo.feature(), String.join(" ", fallo.tags()),
                 fallo.ambiente(), config.app().baseUrl(), config.app().apiUrl(),
-                driver.getCurrentUrl(), driver.getTitle(),
+                fallo.url(), fallo.tituloPagina(),
                 pasos, fallo.pasoFallido(), fallo.error(),
-                fallo.reparacionesHealing().isBlank() ? "Sin intentos de self-healing en este escenario." : fallo.reparacionesHealing());
+                fallo.reparacionesHealing().isBlank() ? "Sin intentos de self-healing en este escenario." : fallo.reparacionesHealing(),
+                escenariosAfectados.size() > 1
+                        ? escenariosAfectados.stream().skip(1).map(e -> "- " + e).collect(Collectors.joining("\n"))
+                        : "Ninguno.");
     }
 }

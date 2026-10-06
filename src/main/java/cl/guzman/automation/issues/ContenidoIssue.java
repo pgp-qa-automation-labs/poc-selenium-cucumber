@@ -59,6 +59,10 @@ final class ContenidoIssue {
     static Map<String, String> contexto(Diagnostico d, ContextoEjecucion c) {
         Map<String, String> filas = new LinkedHashMap<>();
         filas.put("Escenario", d.escenario());
+        if (d.escenariosAfectados() != null && d.escenariosAfectados().size() > 1) {
+            filas.put("Escenarios afectados", d.escenariosAfectados().size() + " con la misma evidencia: "
+                    + String.join("; ", d.escenariosAfectados()));
+        }
         filas.put("Feature", d.feature());
         filas.put("Paso fallido", d.pasoFallido());
         filas.put("URL", d.url());
@@ -68,6 +72,8 @@ final class ContenidoIssue {
         filas.put("Análisis", d.modelo() + ", " + d.iteraciones() + " iteraciones");
         return filas;
     }
+
+    static final String CAPTURA_EN_ARTEFACTOS = "La captura de pantalla está en los artefactos de la ejecución.";
 
     static String comentarioRepeticion(Diagnostico d, ContextoEjecucion c) {
         return "🔁 El fallo se repitió (" + c.origen() + ", rama " + c.rama() + ", commit " + c.commit() + "). "

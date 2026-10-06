@@ -5,10 +5,13 @@ import cl.guzman.automation.triage.Diagnostico;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Publica diagnósticos como issues de Jira Cloud (API REST v3). La descripción va en ADF (Atlassian Document Format).
@@ -39,7 +42,7 @@ public class JiraIssueTracker implements IssueTracker {
     }
 
     @Override
-    public ResultadoIssue publicar(Diagnostico d, ContextoEjecucion contexto, boolean dryRun) {
+    public ResultadoIssue publicar(Diagnostico d, ContextoEjecucion contexto, Path captura, boolean dryRun) {
         String huella = Huella.de(d);
         String titulo = ContenidoIssue.titulo(d);
         List<String> etiquetas = new ArrayList<>(ContenidoIssue.etiquetas(d, "-"));
@@ -52,7 +55,8 @@ public class JiraIssueTracker implements IssueTracker {
         campos.put("labels", etiquetas);
         campos.put("description", descripcion(d, contexto));
         String payload = ClienteHttp.json(Map.of("fields", campos));
-        String vista = vistaPrevia(titulo, etiquetas, d, contexto);
+        String vista = vistaPrevia(titulo, etiquetas, d, contexto)
+                + (captura == null ? "" : "\n**Adjunto:** `" + captura.getFileName() + "` (captura al fallar)\n");
 
         List<String> faltantes = faltantes();
         if (dryRun || !faltantes.isEmpty()) {
@@ -73,14 +77,30 @@ public class JiraIssueTracker implements IssueTracker {
             }
             JsonNode creado = http.enviar("POST", baseUrl + "/rest/api/3/issue", payload, "application/json");
             String clave = creado.path("key").asText();
+            String adjunto = "";
+            if (captura != null) {
+                adjuntar(http, clave, captura);
+                adjunto = " con la captura adjunta";
+            }
             return new ResultadoIssue(ResultadoIssue.Accion.CREADO, huella, titulo, baseUrl + "/browse/" + clave,
-                    "Issue " + clave + " creado", payload, vista);
+                    "Issue " + clave + " creado" + adjunto, payload, vista);
         } catch (IOException | RuntimeException e) {
             return new ResultadoIssue(ResultadoIssue.Accion.ERROR, huella, titulo, null, e.getMessage(), payload, vista);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new ResultadoIssue(ResultadoIssue.Accion.ERROR, huella, titulo, null, "Interrumpido", payload, vista);
         }
+    }
+
+    /**
+     * Adjunta la captura al issue (multipart, con la cabecera que exige Jira para subir archivos).
+     */
+    private void adjuntar(ClienteHttp http, String clave, Path captura) throws IOException, InterruptedException {
+        String boundary = "triage-" + UUID.randomUUID();
+        byte[] cuerpo = ClienteHttp.multipart(boundary, "file", captura.getFileName().toString(), "image/png",
+                Files.readAllBytes(captura));
+        http.enviarBytes(baseUrl + "/rest/api/3/issue/" + clave + "/attachments", cuerpo,
+                "multipart/form-data; boundary=" + boundary, "X-Atlassian-Token", "no-check");
     }
 
     private List<String> faltantes() {

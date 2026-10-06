@@ -53,6 +53,46 @@ final class ClienteHttp {
         return respuesta.body() == null || respuesta.body().isBlank() ? MAPPER.createObjectNode() : MAPPER.readTree(respuesta.body());
     }
 
+    /**
+     * Envía un cuerpo binario (ej. un archivo adjunto) con cabeceras adicionales.
+     */
+    JsonNode enviarBytes(String url, byte[] cuerpo, String contentType, String... cabeceras)
+            throws IOException, InterruptedException {
+        HttpRequest.Builder peticion = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(60))
+                .header("Authorization", autorizacion)
+                .header("Accept", "application/json")
+                .header("Content-Type", contentType)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(cuerpo));
+        for (int i = 0; i + 1 < cabeceras.length; i += 2) {
+            peticion.header(cabeceras[i], cabeceras[i + 1]);
+        }
+        HttpResponse<String> respuesta = http.send(peticion.build(), HttpResponse.BodyHandlers.ofString());
+        if (respuesta.statusCode() >= 300) {
+            String detalle = respuesta.body() == null ? "" : respuesta.body();
+            throw new IOException("HTTP " + respuesta.statusCode() + " en POST " + url + ": "
+                    + (detalle.length() > 300 ? detalle.substring(0, 300) + "..." : detalle));
+        }
+        return respuesta.body() == null || respuesta.body().isBlank() ? MAPPER.createObjectNode() : MAPPER.readTree(respuesta.body());
+    }
+
+    /**
+     * Cuerpo multipart/form-data con un único archivo (como lo pide la API de adjuntos de Jira).
+     */
+    static byte[] multipart(String boundary, String campo, String nombreArchivo, String tipo, byte[] contenido) {
+        String cabecera = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"" + campo + "\"; filename=\"" + nombreArchivo + "\"\r\n"
+                + "Content-Type: " + tipo + "\r\n\r\n";
+        String cierre = "\r\n--" + boundary + "--\r\n";
+        byte[] inicio = cabecera.getBytes(StandardCharsets.UTF_8);
+        byte[] fin = cierre.getBytes(StandardCharsets.UTF_8);
+        byte[] cuerpo = new byte[inicio.length + contenido.length + fin.length];
+        System.arraycopy(inicio, 0, cuerpo, 0, inicio.length);
+        System.arraycopy(contenido, 0, cuerpo, inicio.length, contenido.length);
+        System.arraycopy(fin, 0, cuerpo, inicio.length + contenido.length, fin.length);
+        return cuerpo;
+    }
+
     static String json(Object valor) {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(valor);

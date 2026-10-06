@@ -1,12 +1,9 @@
 package cl.guzman.automation.triage;
 
 import cl.guzman.automation.config.EnvironmentConfig;
-import org.openqa.selenium.WebDriver;
+import cl.guzman.automation.evidencia.PaqueteEvidencia;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * Estado del análisis en curso, accesible para las herramientas del agente.
@@ -18,19 +15,18 @@ final class TriageContext {
     private static final Logger LOG = LoggerFactory.getLogger("Triage");
     private static final ThreadLocal<TriageContext> ACTUAL = new ThreadLocal<>();
 
-    final WebDriver driver;
+    final PaqueteEvidencia evidencia;
     final EnvironmentConfig config;
     private RegistrarDiagnostico diagnostico;
     private int usosDeHerramientas;
-    private List<String> peticionesDeRed;
 
-    private TriageContext(WebDriver driver, EnvironmentConfig config) {
-        this.driver = driver;
+    private TriageContext(PaqueteEvidencia evidencia, EnvironmentConfig config) {
+        this.evidencia = evidencia;
         this.config = config;
     }
 
-    static void iniciar(WebDriver driver, EnvironmentConfig config) {
-        ACTUAL.set(new TriageContext(driver, config));
+    static void iniciar(PaqueteEvidencia evidencia, EnvironmentConfig config) {
+        ACTUAL.set(new TriageContext(evidencia, config));
     }
 
     static TriageContext actual() {
@@ -51,16 +47,6 @@ final class TriageContext {
     void registrarUso(String herramienta, String resultado) {
         usosDeHerramientas++;
         LOG.info("  Herramienta {}: {} → {}", usosDeHerramientas, herramienta, resultado);
-    }
-
-    /**
-     * El log de red del navegador se vacía al leerlo: se guarda la primera lectura por si el agente lo consulta de nuevo.
-     */
-    List<String> peticionesDeRed(Supplier<List<String>> lector) {
-        if (peticionesDeRed == null) {
-            peticionesDeRed = lector.get();
-        }
-        return peticionesDeRed;
     }
 
     void registrar(RegistrarDiagnostico diagnostico) {

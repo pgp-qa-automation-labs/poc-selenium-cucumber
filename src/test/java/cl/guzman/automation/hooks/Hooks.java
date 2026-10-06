@@ -4,13 +4,15 @@ import cl.guzman.automation.config.ConfigReader;
 import cl.guzman.automation.config.EnvironmentConfig;
 import cl.guzman.automation.driver.DriverFactory;
 import cl.guzman.automation.driver.DriverManager;
+import cl.guzman.automation.evidencia.RecolectorEvidencia;
 import cl.guzman.automation.healing.HealingReport;
 import cl.guzman.automation.healing.Reparacion;
 import cl.guzman.automation.issues.IssuePublisher;
 import cl.guzman.automation.listeners.PasosListener;
 import cl.guzman.automation.simulation.UiChangeSimulator;
+import cl.guzman.automation.triage.Diagnostico;
+import cl.guzman.automation.triage.EvaluadorTriage;
 import cl.guzman.automation.triage.FalloEscenario;
-import cl.guzman.automation.triage.TriageAgent;
 import cl.guzman.automation.triage.TriageReport;
 import cl.guzman.automation.utils.ScreenshotUtils;
 import cl.guzman.automation.utils.WarmUpUtils;
@@ -19,21 +21,31 @@ import io.cucumber.java.AfterAll;
 import io.cucumber.java.Before;
 import io.cucumber.java.BeforeAll;
 import io.cucumber.java.Scenario;
+import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 public class Hooks {
 
     private static final Logger LOG = LoggerFactory.getLogger(Hooks.class);
-    private static final Set<String> TAGS_SIMULACION = Set.of("@ui-cambiada", "@ui-rota", "@api-caida", "@uf-caida");
+    private static final Set<String> TAGS_SIMULACION =
+            Set.of("@ui-cambiada", "@ui-rota", "@api-caida", "@uf-caida", "@intermitente");
     private static final Path FUENTES = Path.of("src", "main", "java");
+    // Intentos por escenario (clave: archivo .feature + línea, igual en todos sus reintentos)
+    private static final Map<String, Integer> INTENTOS = new ConcurrentHashMap<>();
 
     @BeforeAll
     public static void prepararAmbiente() {
@@ -43,9 +55,12 @@ public class Hooks {
         LOG.info("Self-healing: {}", config.healingActivo()
                 ? "activo (" + config.healing().model() + ", confianza mínima " + config.healing().minConfidence() + "%)"
                 : "inactivo" + (config.healing().enabled() ? " (falta ANTHROPIC_API_KEY)" : " (healing.enabled=false)"));
-        LOG.info("Triage de fallos: {}", config.triageActivo()
-                ? "activo (" + config.triage().model() + ", máximo " + config.triage().maxIterations() + " iteraciones)"
-                : "inactivo");
+        LOG.info("Reintentos por escenario fallido: {} | Triage al finalizar: {}", config.retry().maxRetries(),
+                config.triageActivo() ? "activo (" + config.triage().model() + ", máximo "
+                        + config.triage().maxInvestigaciones() + " investigaciones)" : "inactivo (solo se guarda la evidencia)");
+
+        // La evidencia y los reportes son de esta ejecución: se descartan los de ejecuciones anteriores
+        Stream.of(RecolectorEvidencia.RAIZ, TriageReport.DIRECTORIO, Path.of("target", "issues")).forEach(Hooks::borrar);
 
         EnvironmentConfig.WarmUp warmUp = config.warmUp();
         if (warmUp.enabled()) {
@@ -58,8 +73,11 @@ public class Hooks {
 
     @Before(order = 0)
     public void iniciarNavegador(Scenario scenario) {
-        boolean simulado = scenario.getSourceTagNames().stream().anyMatch(TAGS_SIMULACION::contains);
-        HealingReport.iniciarEscenario(simulado);
+        int intento = INTENTOS.merge(idEstable(scenario), 1, Integer::sum);
+        if (intento > 1) {
+            LOG.warn("Reintento {} del escenario '{}'", intento - 1, scenario.getName());
+        }
+        HealingReport.iniciarEscenario(esSimulado(scenario));
         DriverManager.setDriver(DriverFactory.create(ConfigReader.get()));
     }
 
@@ -77,16 +95,24 @@ public class Hooks {
 
     @Before(value = "@api-caida", order = 1)
     public void simularApiCaida() {
-        String patron = ConfigReader.get().app().apiUrl() + "/api/properties*";
-        LOG.info("Simulación: bloqueando en el navegador las peticiones a {}", patron);
-        UiChangeSimulator.bloquearPeticiones(DriverManager.getDriver(), List.of(patron));
+        bloquear("/api/properties*");
     }
 
     @Before(value = "@uf-caida", order = 1)
     public void simularUfNoDisponible() {
-        String patron = ConfigReader.get().app().apiUrl() + "/api/uf*";
-        LOG.info("Simulación: bloqueando en el navegador las peticiones a {}", patron);
-        UiChangeSimulator.bloquearPeticiones(DriverManager.getDriver(), List.of(patron));
+        bloquear("/api/uf*");
+    }
+
+    /**
+     * Falla momentánea: la API de propiedades no responde solo en el primer intento (el reintento debe pasar).
+     */
+    @Before(value = "@intermitente", order = 1)
+    public void simularFallaMomentanea(Scenario scenario) {
+        if (INTENTOS.getOrDefault(idEstable(scenario), 1) == 1) {
+            bloquear("/api/properties*");
+        } else {
+            LOG.info("Simulación: en el reintento la API ya responde");
+        }
     }
 
     @After
@@ -95,7 +121,11 @@ public class Hooks {
             if (scenario.isFailed() && DriverManager.hasDriver()) {
                 byte[] captura = ScreenshotUtils.capturar(DriverManager.getDriver());
                 scenario.attach(captura, "image/png", scenario.getName());
-                analizarFallo(scenario, captura);
+                guardarEvidencia(scenario, captura);
+            } else if (!scenario.isFailed() && INTENTOS.getOrDefault(idEstable(scenario), 1) > 1) {
+                RecolectorEvidencia.marcarInestable(scenario.getName(), idEstable(scenario));
+                LOG.warn("Escenario inestable: '{}' falló y luego pasó en un reintento", scenario.getName());
+                scenario.log("⚠️ Escenario inestable: falló y pasó en un reintento. No se investiga ni se crea un issue.");
             }
             adjuntarReparaciones(scenario);
         } finally {
@@ -104,25 +134,25 @@ public class Hooks {
     }
 
     @AfterAll
-    public static void escribirReportes() {
-        TriageReport.escribirArchivos();
-        IssuePublisher.publicar(TriageReport.deLaEjecucion(), ConfigReader.get(), System.getenv());
+    public static void finalizar() {
+        EnvironmentConfig config = ConfigReader.get();
         HealingReport.escribirArchivos();
-        if (ConfigReader.get().healing().patchSources()) {
+        if (config.healing().patchSources()) {
             int corregidos = HealingReport.corregirCodigo(FUENTES);
             LOG.warn("Self-healing: {} locator(es) corregido(s) en el código fuente", corregidos);
+        }
+        // En el pipeline el triage es una etapa aparte (triage.enabled=false aquí); en local se evalúa al terminar
+        if (config.triage().enabled()) {
+            List<Diagnostico> diagnosticos = EvaluadorTriage.evaluar(config, RecolectorEvidencia.RAIZ, null);
+            IssuePublisher.publicar(diagnosticos, config, System.getenv(), EvaluadorTriage.CAPTURAS);
         }
     }
 
     /**
-     * Con el navegador aún abierto en el estado del fallo, el agente de triage investiga la causa.
-     * Un problema del triage nunca cambia el resultado del escenario.
+     * Guarda el paquete de evidencia con el navegador aún abierto en el estado del fallo (ver PaqueteEvidencia).
      */
-    private static void analizarFallo(Scenario scenario, byte[] captura) {
-        EnvironmentConfig config = ConfigReader.get();
-        if (!config.triageActivo()) {
-            return;
-        }
+    private static void guardarEvidencia(Scenario scenario, byte[] captura) {
+        WebDriver driver = DriverManager.getDriver();
         PasosListener.Ejecucion ejecucion = PasosListener.actual();
         List<Reparacion> reparaciones = HealingReport.delEscenario();
         FalloEscenario fallo = new FalloEscenario(
@@ -135,14 +165,31 @@ public class Hooks {
                 ejecucion.pasos(),
                 ejecucion.pasoFallido(),
                 ejecucion.error(),
-                config.env(),
+                ConfigReader.get().env(),
                 reparaciones.isEmpty() ? "" : HealingReport.aMarkdown(reparaciones, false),
-                scenario.getSourceTagNames().stream().anyMatch(TAGS_SIMULACION::contains));
+                esSimulado(scenario),
+                driver.getCurrentUrl(),
+                driver.getTitle(),
+                INTENTOS.getOrDefault(idEstable(scenario), 1));
+        Path directorio = RecolectorEvidencia.guardar(driver, idEstable(scenario), fallo, captura);
+        LOG.info("Evidencia del fallo guardada en {}", directorio);
+    }
 
-        new TriageAgent(config).analizar(DriverManager.getDriver(), fallo, captura).ifPresent(diagnostico -> {
-            TriageReport.registrar(diagnostico);
-            scenario.attach(TriageReport.aMarkdown(diagnostico).getBytes(StandardCharsets.UTF_8), "text/markdown", "Triage IA");
-        });
+    /**
+     * Identificador del escenario igual en todos sus reintentos (Cucumber genera un id nuevo en cada ejecución).
+     */
+    private static String idEstable(Scenario scenario) {
+        return scenario.getUri() + ":" + scenario.getLine();
+    }
+
+    private static boolean esSimulado(Scenario scenario) {
+        return scenario.getSourceTagNames().stream().anyMatch(TAGS_SIMULACION::contains);
+    }
+
+    private static void bloquear(String ruta) {
+        String patron = ConfigReader.get().app().apiUrl() + ruta;
+        LOG.info("Simulación: bloqueando en el navegador las peticiones a {}", patron);
+        UiChangeSimulator.bloquearPeticiones(DriverManager.getDriver(), List.of(patron));
     }
 
     private static void adjuntarReparaciones(Scenario scenario) {
@@ -154,5 +201,18 @@ public class Hooks {
         long aplicadas = reparaciones.stream().filter(Reparacion::aplicada).count();
         LOG.warn("Escenario '{}': {} reparación(es) aplicada(s) de {} intento(s) de self-healing",
                 scenario.getName(), aplicadas, reparaciones.size());
+    }
+
+    private static void borrar(Path directorio) {
+        if (!Files.exists(directorio)) {
+            return;
+        }
+        try (Stream<Path> archivos = Files.walk(directorio)) {
+            for (Path archivo : archivos.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(archivo);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("No se pudo limpiar " + directorio, e);
+        }
     }
 }

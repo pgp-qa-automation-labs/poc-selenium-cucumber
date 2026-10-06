@@ -1,40 +1,20 @@
 package cl.guzman.automation.triage;
 
 import com.fasterxml.jackson.annotation.JsonClassDescription;
-import org.openqa.selenium.logging.LogEntry;
-import org.openqa.selenium.logging.LogType;
 
 import java.util.List;
 import java.util.function.Supplier;
 
-@JsonClassDescription("Devuelve los últimos mensajes de la consola del navegador (errores de JavaScript, recursos que no "
-        + "cargaron, respuestas HTTP con error de la API). Úsala para saber si el front tuvo errores o no pudo comunicarse con el backend.")
+@JsonClassDescription("Devuelve los mensajes de la consola del navegador registrados hasta el fallo (errores de JavaScript, "
+        + "recursos que no cargaron). Úsala para saber si el front tuvo errores propios.")
 public class LeerConsola implements Supplier<String> {
-
-    private static final int MAX_ENTRADAS = 50;
 
     @Override
     public String get() {
         TriageContext contexto = TriageContext.actual();
-        try {
-            List<LogEntry> entradas = contexto.driver.manage().logs().get(LogType.BROWSER).getAll();
-            long errores = entradas.stream().filter(e -> "SEVERE".equals(e.getLevel().getName())).count();
-            contexto.registrarUso("LeerConsola", entradas.size() + " mensajes, " + errores + " errores");
-            if (entradas.isEmpty()) {
-                return "La consola del navegador no tiene mensajes.";
-            }
-            StringBuilder salida = new StringBuilder();
-            entradas.stream()
-                    .skip(Math.max(0, entradas.size() - MAX_ENTRADAS))
-                    .forEach(e -> salida.append('[').append(e.getLevel()).append("] ").append(recortar(e.getMessage())).append('\n'));
-            return salida.toString();
-        } catch (RuntimeException e) {
-            contexto.registrarUso("LeerConsola", "error: " + e.getMessage());
-            return "No se pudo leer la consola del navegador: " + e.getMessage();
-        }
-    }
-
-    private static String recortar(String texto) {
-        return texto.length() > 500 ? texto.substring(0, 500) + "..." : texto;
+        List<String> lineas = contexto.evidencia.consola().lines().toList();
+        long errores = lineas.stream().filter(l -> l.startsWith("[SEVERE]")).count();
+        contexto.registrarUso("LeerConsola", lineas.size() + " mensajes, " + errores + " errores");
+        return lineas.isEmpty() ? "La consola del navegador no tenía mensajes." : String.join("\n", lineas);
     }
 }

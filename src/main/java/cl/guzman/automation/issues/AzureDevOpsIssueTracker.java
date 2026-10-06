@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +42,7 @@ public class AzureDevOpsIssueTracker implements IssueTracker {
     }
 
     @Override
-    public ResultadoIssue publicar(Diagnostico d, ContextoEjecucion contexto, boolean dryRun) {
+    public ResultadoIssue publicar(Diagnostico d, ContextoEjecucion contexto, Path captura, boolean dryRun) {
         String huella = Huella.de(d);
         String titulo = ContenidoIssue.titulo(d);
         List<String> tags = new ArrayList<>(ContenidoIssue.etiquetas(d, "-"));
@@ -48,11 +50,15 @@ public class AzureDevOpsIssueTracker implements IssueTracker {
         String reproSteps = html(d, contexto);
 
         // JSON Patch: así crea work items la API de Azure DevOps
-        List<Map<String, Object>> operaciones = List.of(
+        List<Map<String, Object>> operaciones = new ArrayList<>(List.of(
                 campo("System.Title", titulo.length() > 255 ? titulo.substring(0, 252) + "..." : titulo),
                 campo("Microsoft.VSTS.TCM.ReproSteps", reproSteps),
                 campo("Microsoft.VSTS.Common.Severity", severidad(d.severidad())),
-                campo("System.Tags", String.join("; ", tags)));
+                campo("System.Tags", String.join("; ", tags))));
+        if (captura != null) {
+            // En dry-run se muestra dónde irá el adjunto; al publicar se reemplaza por la URL real del archivo subido
+            operaciones.add(adjunto("<URL del adjunto subido: " + captura.getFileName() + ">"));
+        }
         String payload = ClienteHttp.json(operaciones);
         String vista = "# " + titulo + "\n\n**Azure DevOps:** work item tipo `" + tipoWorkItem + "` · severidad `"
                 + severidad(d.severidad()) + "` · tags: " + String.join("; ", tags)
@@ -76,6 +82,12 @@ public class AzureDevOpsIssueTracker implements IssueTracker {
                         comentario, "application/json");
                 return new ResultadoIssue(ResultadoIssue.Accion.COMENTADO, huella, titulo, base + "/_workitems/edit/" + existente,
                         "El fallo ya tenía un work item abierto: se agregó un comentario", comentario, vista);
+            }
+            if (captura != null) {
+                JsonNode subido = http.enviarBytes(base + "/_apis/wit/attachments?fileName=" + codificar(captura.getFileName().toString())
+                        + "&" + API_VERSION, Files.readAllBytes(captura), "application/octet-stream");
+                operaciones.set(operaciones.size() - 1, adjunto(subido.path("url").asText()));
+                payload = ClienteHttp.json(operaciones);
             }
             JsonNode creado = http.enviar("POST", base + "/_apis/wit/workitems/$" + codificar(tipoWorkItem) + "?" + API_VERSION,
                     payload, "application/json-patch+json");
@@ -112,6 +124,14 @@ public class AzureDevOpsIssueTracker implements IssueTracker {
                 ClienteHttp.json(Map.of("query", wiql)), "application/json");
         JsonNode items = resultado.path("workItems");
         return items.isArray() && !items.isEmpty() ? items.get(0).path("id").asInt() : null;
+    }
+
+    /**
+     * Relación que vincula un archivo subido como adjunto del work item.
+     */
+    private static Map<String, Object> adjunto(String url) {
+        return Map.of("op", "add", "path", "/relations/-",
+                "value", Map.of("rel", "AttachedFile", "url", url, "attributes", Map.of("comment", "Captura al fallar")));
     }
 
     private static Map<String, Object> campo(String nombre, Object valor) {

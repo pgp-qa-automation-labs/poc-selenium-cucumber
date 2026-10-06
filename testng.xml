@@ -1,5 +1,9 @@
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <suite name="Guzman Corretaje E2E">
+    <listeners>
+        <!-- Reintenta los escenarios fallidos (retry.maxRetries) para distinguir fallos consistentes de inestables -->
+        <listener class-name="cl.guzman.automation.retry.ReintentoTransformer"/>
+    </listeners>
     <test name="Cucumber">
         <classes>
             <class name="cl.guzman.automation.runners.TestRunner"/>

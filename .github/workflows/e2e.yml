@@ -12,7 +12,7 @@ on:
         options: [qa, prod]
         default: qa
       escenarios:
-        description: Expresión de tags de Cucumber (ej. @api-caida para correr una demo de triage)
+        description: Expresión de tags de Cucumber (ej. @ui-rota para correr una demo de triage)
         type: string
         default: not @self-healing and not @manual
       destino_issues:
@@ -24,7 +24,7 @@ on:
         description: Ejecutar también la demo de self-healing (cambios de UI simulados, ~USD 0,10)
         type: boolean
         default: false
-  # Ejecución diaria (lunes a viernes, 08:00 hora de Chile) para detectar cambios del front aunque nadie haga push
+  # Ejecución diaria (lunes a viernes, 08:00 hora de Chile). GitHub solo la activa desde la rama principal del repo.
   schedule:
     - cron: '0 11 * * 1-5'
 
@@ -39,14 +39,15 @@ concurrency:
 env:
   TEST_ENV: ${{ inputs.env || 'qa' }}
   ESCENARIOS: ${{ inputs.escenarios || 'not @self-healing and not @manual' }}
-  # Los issues reales solo se crean fuera de PRs; dentro de un PR se genera solo la vista previa (dry-run)
-  ISSUES_DRY_RUN: ${{ github.event_name == 'pull_request' || inputs.destino_issues == 'ninguno' }}
-  # Destino de los issues: el elegido al lanzar a mano; en ejecuciones automáticas, la variable del repo ISSUES_DESTINO o github.
-  # 'ninguno' genera la vista previa de los tres gestores sin publicar nada.
-  ISSUES_DESTINO: ${{ inputs.destino_issues || vars.ISSUES_DESTINO || 'github' }}
   PR_BRANCH: self-healing/correccion-locators
+  RAMA_EVIDENCIAS: triage-evidencias
+  # Los issues reales solo se crean fuera de PRs; dentro de un PR, o con destino 'ninguno', solo se genera la vista previa
+  ISSUES_DRY_RUN: ${{ github.event_name == 'pull_request' || inputs.destino_issues == 'ninguno' }}
+  # Destino: el elegido al lanzar a mano; en ejecuciones automáticas, la variable del repo ISSUES_DESTINO o github
+  ISSUES_DESTINO: ${{ inputs.destino_issues || vars.ISSUES_DESTINO || 'github' }}
 
 jobs:
+  # ───────────────────────────── Etapa 1 ─────────────────────────────
   compilar:
     name: 1 · Compilar
     runs-on: ubuntu-latest
@@ -55,49 +56,43 @@ jobs:
       - name: Descargar código
         uses: actions/checkout@v4
 
-      - name: Instalar Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
+      - name: Preparar entorno
+        uses: ./.github/actions/preparar-entorno
 
       - name: Compilar framework y pruebas
         run: mvn -B -q test-compile
 
+  # ───────────────────────────── Etapa 2 ─────────────────────────────
   regresion:
     name: 2 · Pruebas de regresión
     needs: compilar
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     outputs:
       hay_correcciones: ${{ steps.parche.outputs.hay_correcciones }}
-      hay_diagnosticos: ${{ steps.diagnosticos.outputs.hay_diagnosticos }}
+      hay_evidencia: ${{ steps.evidencia.outputs.hay_evidencia }}
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
 
-      - name: Instalar Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
+      - name: Preparar entorno
+        uses: ./.github/actions/preparar-entorno
 
       - name: Despertar API del ambiente
         run: bash .github/scripts/warmup.sh "$TEST_ENV"
 
+      # Aquí solo se prueba: cada escenario fallido se reintenta una vez y, si vuelve a fallar, se guarda su
+      # paquete de evidencia (captura, HTML, consola, red). El diagnóstico es la etapa 3.
       # CI=true lo define GitHub Actions: ConfigReader fuerza headless automáticamente.
-      # patchSources=true: si el self-healing repara un locator, se corrige en el código para proponer un PR.
-      # issues.enabled=false: aquí solo se diagnostica; la etapa 3 decide qué publicar y dónde.
-      - name: Ejecutar escenarios de regresión
+      - name: Ejecutar escenarios (con reintento y evidencia)
         run: >
           mvn -B test -Denv="$TEST_ENV"
           "-Dcucumber.filter.tags=$ESCENARIOS"
           -Dhealing.patchSources=true
+          -Dtriage.enabled=false
           -Dissues.enabled=false
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # sin la key el self-healing y el triage se desactivan solos
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # para el self-healing; sin la key se desactiva solo
 
       - name: Generar parche de locators corregidos
         id: parche
@@ -113,22 +108,21 @@ jobs:
             echo "No hubo locators que corregir"
           fi
 
-      - name: Detectar diagnósticos de triage
-        id: diagnosticos
+      - name: Detectar evidencia de fallos
+        id: evidencia
         if: always()
         run: |
-          if [ -f target/triage/triage-report.json ]; then
-            echo "hay_diagnosticos=true" >> "$GITHUB_OUTPUT"
+          if ls target/evidencia/*/estado.txt > /dev/null 2>&1; then
+            echo "hay_evidencia=true" >> "$GITHUB_OUTPUT"
+            echo "Escenarios con evidencia:"; grep -H . target/evidencia/*/estado.txt
           else
-            echo "hay_diagnosticos=false" >> "$GITHUB_OUTPUT"
+            echo "hay_evidencia=false" >> "$GITHUB_OUTPUT"
+            echo "Ningún escenario falló"
           fi
 
-      - name: Resumen de triage y self-healing
+      - name: Resumen de self-healing
         if: always()
         run: |
-          for reporte in target/triage/triage-report.md; do
-            if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; fi
-          done
           if [ -f target/healing/healing-report.md ]; then
             cat target/healing/healing-report.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -143,8 +137,14 @@ jobs:
           path: |
             target/cucumber-reports/
             target/healing/
-            target/triage/
           if-no-files-found: ignore
+
+      - name: Publicar paquetes de evidencia
+        if: always() && steps.evidencia.outputs.hay_evidencia == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia
+          path: target/evidencia/
 
   demo-self-healing:
     name: 2 · Demo self-healing (UI simulada)
@@ -157,27 +157,21 @@ jobs:
       - name: Descargar código
         uses: actions/checkout@v4
 
-      - name: Instalar Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
+      - name: Preparar entorno
+        uses: ./.github/actions/preparar-entorno
 
       - name: Despertar API del ambiente
         run: bash .github/scripts/warmup.sh "$TEST_ENV"
 
       - name: Ejecutar escenario con cambios de UI simulados
-        run: mvn -B test -Denv="$TEST_ENV" "-Dcucumber.filter.tags=@ui-cambiada" -Dissues.enabled=false
+        run: mvn -B test -Denv="$TEST_ENV" "-Dcucumber.filter.tags=@ui-cambiada" -Dtriage.enabled=false -Dissues.enabled=false
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Resumen de triage y self-healing
+      - name: Resumen de self-healing
         if: always()
         run: |
-          for reporte in target/triage/triage-report.md target/healing/healing-report.md; do
-            if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; fi
-          done
+          if [ -f target/healing/healing-report.md ]; then cat target/healing/healing-report.md >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Publicar reportes
         if: always()
@@ -187,9 +181,9 @@ jobs:
           path: |
             target/cucumber-reports/
             target/healing/
-            target/triage/
           if-no-files-found: ignore
 
+  # ───────────────────────────── Etapa 3 ─────────────────────────────
   pr-correccion:
     name: 3 · PR de corrección de locators
     needs: regresion
@@ -234,13 +228,109 @@ jobs:
             echo "PR creado: $(gh pr view "$PR_BRANCH" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  issues-triage:
-    name: 3 · Issues de triage
+  triage:
+    name: 3 · Evaluación de triage
     needs: regresion
-    # Corre aunque la regresión falle (justamente cuando hay diagnósticos), pero no si se canceló
-    if: always() && needs.regresion.result != 'cancelled' && needs.regresion.outputs.hay_diagnosticos == 'true'
+    # Corre aunque la regresión falle (justamente cuando hay evidencia), pero no si se canceló
+    if: always() && needs.regresion.result != 'cancelled' && needs.regresion.outputs.hay_evidencia == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write  # solo para subir las capturas a la rama de evidencias
+    outputs:
+      hay_diagnosticos: ${{ steps.resultado.outputs.hay_diagnosticos }}
+      gestores: ${{ steps.resultado.outputs.gestores }}
+    env:
+      EVIDENCIAS_URL_BASE: https://raw.githubusercontent.com/${{ github.repository }}/triage-evidencias/${{ github.run_id }}
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Preparar entorno
+        uses: ./.github/actions/preparar-entorno
+
+      - name: Descargar evidencia de la regresión
+        uses: actions/download-artifact@v4
+        with:
+          name: evidencia
+          path: evidencia
+
+      # Descarta los inestables, agrupa los fallos con la misma causa, respeta el tope de investigaciones
+      # y el agente investiga un escenario por grupo. Cada investigación es una sección plegable del log.
+      - name: Investigar fallos con el agente
+        run: >
+          mvn -B test-compile exec:java
+          -Dexec.mainClass=cl.guzman.automation.triage.EvaluarTriage
+          -Dexec.args=evidencia
+          -Denv="$TEST_ENV"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Publicar capturas en la rama de evidencias
+        if: hashFiles('target/triage/capturas/*.png') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dir="$RUNNER_TEMP/evidencias"
+          git init -q "$dir" && cd "$dir"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth 1 origin "$RAMA_EVIDENCIAS" 2>/dev/null; then
+            git checkout -q -b "$RAMA_EVIDENCIAS" FETCH_HEAD
+          else
+            git checkout -q --orphan "$RAMA_EVIDENCIAS"
+            printf '# Evidencias del triage\n\nCapturas de los fallos diagnosticados por el pipeline, una carpeta por ejecución.\nRama generada automáticamente: no contiene código.\n' > README.md
+          fi
+          mkdir -p "$GITHUB_RUN_ID"
+          cp "$GITHUB_WORKSPACE"/target/triage/capturas/*.png "$GITHUB_RUN_ID"/
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "Evidencias del run $GITHUB_RUN_ID"
+          git push -q origin "$RAMA_EVIDENCIAS"
+          echo "Capturas publicadas en la rama $RAMA_EVIDENCIAS, carpeta $GITHUB_RUN_ID"
+
+      - name: Decidir publicación
+        id: resultado
+        if: always()
+        run: |
+          if [ -f target/triage/triage-report.json ]; then
+            echo "hay_diagnosticos=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "hay_diagnosticos=false" >> "$GITHUB_OUTPUT"
+          fi
+          case "$ISSUES_DESTINO" in
+            github)      g='[{"id":"github","nombre":"GitHub"}]' ;;
+            jira)        g='[{"id":"jira","nombre":"Jira"}]' ;;
+            azuredevops) g='[{"id":"azuredevops","nombre":"Azure DevOps"}]' ;;
+            *)           g='[{"id":"github","nombre":"GitHub"},{"id":"jira","nombre":"Jira"},{"id":"azuredevops","nombre":"Azure DevOps"}]' ;;
+          esac
+          echo "gestores=$g" >> "$GITHUB_OUTPUT"
+          echo "Destino de los issues: $ISSUES_DESTINO (dry-run: $ISSUES_DRY_RUN)"
+
+      - name: Resumen del triage
+        if: always()
+        run: |
+          if [ -f target/triage/triage-report.md ]; then cat target/triage/triage-report.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Publicar diagnósticos y capturas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: triage
+          path: target/triage/
+          if-no-files-found: ignore
+
+  # ───────────────────────────── Etapa 4 ─────────────────────────────
+  issues:
+    name: 4 · Issue en ${{ matrix.nombre }}
+    needs: triage
+    if: always() && needs.triage.outputs.hay_diagnosticos == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Una ejecución por gestor elegido; si uno falla, los demás siguen
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.triage.outputs.gestores || '[{"id":"github","nombre":"GitHub"}]') }}
     permissions:
       contents: read
       issues: write
@@ -248,74 +338,45 @@ jobs:
       - name: Descargar código
         uses: actions/checkout@v4
 
-      - name: Instalar Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
+      - name: Preparar entorno
+        uses: ./.github/actions/preparar-entorno
 
-      - name: Descargar diagnósticos de la regresión
+      - name: Descargar diagnósticos del triage
         uses: actions/download-artifact@v4
         with:
-          name: reporte-regresion
-          path: reporte
+          name: triage
+          path: triage
 
-      # Un paso por gestor: solo se ejecutan los elegidos en ISSUES_DESTINO (los demás aparecen omitidos).
-      # En PRs, o con destino 'ninguno', quedan en dry-run. Sin credenciales, generan solo la vista previa (no fallan).
-      - name: Publicar en GitHub Issues
-        if: contains(fromJSON('["github", "todos", "ninguno"]'), env.ISSUES_DESTINO)
+      # Sin credenciales del gestor, solo genera la vista previa (no falla)
+      - name: Publicar issue en ${{ matrix.nombre }}
         run: >
           mvn -B test-compile exec:java
           -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues
-          -Dexec.args=reporte/triage/triage-report.json
+          -Dexec.args=triage/triage-report.json
           -Denv="$TEST_ENV"
-          -Dissues.tracker=github
-          -Dissues.dryRun=$ISSUES_DRY_RUN
-        env:
-          GITHUB_TOKEN: ${{ github.token }}  # token temporal del workflow, con permiso solo sobre issues
-
-      - name: Publicar en Jira
-        # !cancelled(): se ejecuta aunque falle la publicación en otro gestor
-        if: ${{ !cancelled() && contains(fromJSON('["jira", "todos", "ninguno"]'), env.ISSUES_DESTINO) }}
-        run: >
-          mvn -B test-compile exec:java
-          -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues
-          -Dexec.args=reporte/triage/triage-report.json
-          -Denv="$TEST_ENV"
-          -Dissues.tracker=jira
+          -Dissues.tracker=${{ matrix.id }}
           -Dissues.dryRun=$ISSUES_DRY_RUN
           "-Dissues.jiraBaseUrl=${{ vars.JIRA_BASE_URL }}"
           "-Dissues.jiraProjectKey=${{ vars.JIRA_PROJECT_KEY }}"
-        env:
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-
-      - name: Publicar en Azure DevOps
-        if: ${{ !cancelled() && contains(fromJSON('["azuredevops", "todos", "ninguno"]'), env.ISSUES_DESTINO) }}
-        run: >
-          mvn -B test-compile exec:java
-          -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues
-          -Dexec.args=reporte/triage/triage-report.json
-          -Denv="$TEST_ENV"
-          -Dissues.tracker=azuredevops
-          -Dissues.dryRun=$ISSUES_DRY_RUN
           "-Dissues.azureOrgUrl=${{ vars.AZURE_DEVOPS_ORG_URL }}"
           "-Dissues.azureProject=${{ vars.AZURE_DEVOPS_PROJECT }}"
         env:
+          GITHUB_TOKEN: ${{ github.token }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
 
-      - name: Resumen de issues
+      - name: Resumen
         if: always()
         run: |
           for reporte in target/issues/*/issues-report.md; do
-            if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; fi
+            if [ -f "$reporte" ]; then cat "$reporte" >> "$GITHUB_STEP_SUMMARY"; fi
           done
 
       - name: Publicar vista previa y payloads
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: issues-triage
+          name: issues-${{ matrix.id }}
           path: target/issues/
           if-no-files-found: ignore

@@ -10,6 +10,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,7 +47,7 @@ public class GitHubIssueTracker implements IssueTracker {
     }
 
     @Override
-    public ResultadoIssue publicar(Diagnostico d, ContextoEjecucion contexto, boolean dryRun) {
+    public ResultadoIssue publicar(Diagnostico d, ContextoEjecucion contexto, Path captura, boolean dryRun) {
         String huella = Huella.de(d);
         Map<String, Object> issue = new LinkedHashMap<>();
         issue.put("title", titulo(d));
@@ -111,30 +112,32 @@ public class GitHubIssueTracker implements IssueTracker {
         md.append("\n**Severidad:** ").append(d.severidad())
                 .append(" · **Categoría:** ").append(d.categoria())
                 .append(" · **Área:** ").append(d.areaResponsable())
-                .append(" · **Confianza:** ").append(d.confianza()).append("%\n\n")
-                .append("### Causa probable\n").append(d.causaProbable()).append("\n\n")
+                .append(" · **Confianza:** ").append(d.confianza()).append("%\n\n");
+        // La API de issues no acepta adjuntos: la captura se publica en la rama de evidencias y se muestra por URL
+        if (d.capturaUrl() != null) {
+            md.append("![Captura al fallar](").append(d.capturaUrl()).append(")\n\n");
+        }
+        md.append("### Causa probable\n").append(d.causaProbable()).append("\n\n")
                 .append("### Evidencias\n");
         d.evidencias().forEach(e -> md.append("- ").append(e).append("\n"));
         md.append("\n### Acción recomendada\n").append(d.accionRecomendada()).append("\n\n")
                 .append("### Contexto\n")
-                .append("| | |\n|---|---|\n")
-                .append("| Escenario | ").append(d.escenario()).append(" |\n")
-                .append("| Feature | `").append(d.feature()).append("` |\n")
-                .append("| Paso fallido | ").append(d.pasoFallido()).append(" |\n")
-                .append("| URL | ").append(d.url()).append(" |\n")
-                .append("| Ambiente | ").append(d.ambiente()).append(" |\n")
-                .append("| Origen | ").append(c.origen()).append(" |\n")
-                .append("| Rama / commit | `").append(c.rama()).append("` / `").append(c.commit()).append("` |\n")
-                .append("| Ejecución | ").append(c.urlEjecucion() == null ? "local" : "[Ver captura y reportes](" + c.urlEjecucion() + ")").append(" |\n")
-                .append("| Análisis | ").append(d.modelo()).append(", ").append(d.iteraciones()).append(" iteraciones |\n\n")
-                .append("<!-- triage-huella: ").append(huella).append(" -->\n");
+                .append("| | |\n|---|---|\n");
+        ContenidoIssue.contexto(d, c).forEach((clave, valor) ->
+                md.append("| ").append(clave).append(" | ").append(valor.replace("|", "\\|")).append(" |\n"));
+        md.append("| Ejecución | ").append(c.urlEjecucion() == null ? "local" : "[Ver reportes y evidencia](" + c.urlEjecucion() + ")").append(" |\n\n");
+        if (d.capturaUrl() == null) {
+            md.append("_").append(ContenidoIssue.CAPTURA_EN_ARTEFACTOS).append("_\n\n");
+        }
+        md.append("<!-- triage-huella: ").append(huella).append(" -->\n");
         return md.toString();
     }
 
     private static String comentarioRepeticion(Diagnostico d, ContextoEjecucion c) {
         return "🔁 El fallo se repitió (" + c.origen() + ", rama `" + c.rama() + "`, commit `" + c.commit() + "`). "
                 + "Confianza del nuevo diagnóstico: " + d.confianza() + "%."
-                + (c.urlEjecucion() == null ? "" : " [Ver ejecución](" + c.urlEjecucion() + ")");
+                + (c.urlEjecucion() == null ? "" : " [Ver ejecución](" + c.urlEjecucion() + ")")
+                + (d.capturaUrl() == null ? "" : "\n\n![Captura al fallar](" + d.capturaUrl() + ")");
     }
 
     private Optional<JsonNode> buscarAbierto(String huella) throws IOException, InterruptedException {

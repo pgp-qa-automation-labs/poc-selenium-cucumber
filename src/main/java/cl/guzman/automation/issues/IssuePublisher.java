@@ -26,7 +26,11 @@ public final class IssuePublisher {
     private IssuePublisher() {
     }
 
-    public static List<ResultadoIssue> publicar(List<Diagnostico> diagnosticos, EnvironmentConfig config, Map<String, String> env) {
+    /**
+     * @param carpetaCapturas carpeta donde el triage dejó las capturas (&lt;huella&gt;.png)
+     */
+    public static List<ResultadoIssue> publicar(List<Diagnostico> diagnosticos, EnvironmentConfig config,
+                                                Map<String, String> env, Path carpetaCapturas) {
         EnvironmentConfig.Issues cfg = config.issues();
         if (cfg == null || !cfg.enabled() || diagnosticos.isEmpty()) {
             return List.of();
@@ -43,7 +47,8 @@ public final class IssuePublisher {
                         null, null));
                 continue;
             }
-            resultados.add(tracker.publicar(d, contexto, cfg.dryRun()));
+            Path captura = d.capturaArchivo() == null ? null : carpetaCapturas.resolve(d.capturaArchivo());
+            resultados.add(tracker.publicar(d, contexto, captura != null && Files.exists(captura) ? captura : null, cfg.dryRun()));
         }
         resultados.forEach(r -> LOG.info("Issues: {} - {} {}", r.accion(), r.titulo(), r.url() == null ? "" : r.url()));
         escribir(resultados, cfg.tracker().toLowerCase(Locale.ROOT), tracker.nombre(), cfg.dryRun());

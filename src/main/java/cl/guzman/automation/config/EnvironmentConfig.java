@@ -10,6 +10,7 @@ public record EnvironmentConfig(
         Timeouts timeouts,
         WarmUp warmUp,
         Healing healing,
+        Retry retry,
         Triage triage,
         Issues issues,
         Secrets secrets) {
@@ -53,9 +54,17 @@ public record EnvironmentConfig(
     }
 
     /**
-     * @param maxIterations máximo de vueltas del agente (cada vuelta es una llamada a la API)
+     * @param maxRetries reintentos de un escenario fallido antes de considerarlo un fallo consistente
+     *                   (si pasa en un reintento, se registra como inestable y no se investiga)
      */
-    public record Triage(boolean enabled, String model, int maxIterations, int requestTimeoutSeconds) {
+    public record Retry(int maxRetries) {
+    }
+
+    /**
+     * @param maxIterations      máximo de vueltas del agente por investigación (cada vuelta es una llamada a la API)
+     * @param maxInvestigaciones máximo de grupos de fallos que se investigan por ejecución (tope de costo)
+     */
+    public record Triage(boolean enabled, String model, int maxIterations, int maxInvestigaciones, int requestTimeoutSeconds) {
     }
 
     /**

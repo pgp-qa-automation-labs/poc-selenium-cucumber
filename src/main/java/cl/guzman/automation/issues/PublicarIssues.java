@@ -13,8 +13,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Punto de entrada de la etapa "Issues de triage" del pipeline: publica los diagnósticos que dejó la etapa
- * de pruebas (triage-report.json), sin volver a ejecutar las pruebas.
+ * Punto de entrada de la etapa "Issue en &lt;gestor&gt;" del pipeline: publica los diagnósticos que dejó la evaluación
+ * de triage (triage-report.json y la carpeta capturas/ junto a él), sin volver a ejecutar pruebas ni IA.
  *
  * <pre>mvn exec:java -Dexec.mainClass=cl.guzman.automation.issues.PublicarIssues -Dexec.args=ruta/triage-report.json</pre>
  */
@@ -35,10 +35,11 @@ public final class PublicarIssues {
         }
         List<Diagnostico> diagnosticos = MAPPER.readValue(reporte.toFile(), new TypeReference<>() {
         });
-        List<ResultadoIssue> resultados = IssuePublisher.publicar(diagnosticos, ConfigReader.get(), System.getenv());
+        Path capturas = reporte.toAbsolutePath().getParent().resolve("capturas");
+        List<ResultadoIssue> resultados = IssuePublisher.publicar(diagnosticos, ConfigReader.get(), System.getenv(), capturas);
         if (resultados.stream().anyMatch(r -> r.accion() == ResultadoIssue.Accion.ERROR)) {
             // exec:java corre en la JVM de Maven: una excepción hace fallar el paso sin cortar Maven abruptamente
-            throw new IllegalStateException("Uno o más issues no se pudieron publicar; revisa target/issues/issues-report.md");
+            throw new IllegalStateException("Uno o más issues no se pudieron publicar; revisa target/issues/");
         }
     }
 }

@@ -4,11 +4,20 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Resultado del agente de triage para un escenario fallido. Es independiente del gestor de proyectos:
+ * Resultado del agente de triage para un grupo de fallos con la misma causa. Es independiente del gestor de proyectos:
  * es el insumo para crear un issue en GitHub, Jira o Azure DevOps.
+ *
+ * @param huella              identificador estable del problema (no depende de la IA): evita issues duplicados
+ * @param escenariosAfectados todos los escenarios del grupo (el primero es el que se investigó)
+ * @param capturaArchivo      nombre del archivo de la captura en la carpeta de capturas del triage
+ * @param capturaUrl          URL pública de la captura, si se publicó (para mostrarla en el issue y en el resumen)
  */
 public record Diagnostico(
         Instant fecha,
+        String huella,
+        List<String> escenariosAfectados,
+        String capturaArchivo,
+        String capturaUrl,
         String escenario,
         String feature,
         String pasoFallido,
@@ -27,6 +36,15 @@ public record Diagnostico(
         int iteraciones,
         long tokensEntrada,
         long tokensSalida) {
+
+    /**
+     * Copia del diagnóstico con la captura asociada (se conoce después del análisis, al publicar la evidencia).
+     */
+    public Diagnostico conCaptura(String archivo, String url) {
+        return new Diagnostico(fecha, huella, escenariosAfectados, archivo, url, escenario, feature, pasoFallido, this.url,
+                ambiente, simulado, categoria, severidad, areaResponsable, titulo, causaProbable, evidencias,
+                accionRecomendada, confianza, modelo, iteraciones, tokensEntrada, tokensSalida);
+    }
 
     public enum Categoria {
         /** La aplicación no se comporta como debe: hay un defecto en el front o en el backend. */

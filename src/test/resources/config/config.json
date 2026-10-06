@@ -27,10 +27,14 @@
     "requestTimeoutSeconds": 120,
     "patchSources": false
   },
+  "retry": {
+    "maxRetries": 1
+  },
   "triage": {
     "enabled": true,
     "model": "claude-sonnet-5-5",
     "maxIterations": 8,
+    "maxInvestigaciones": 5,
     "requestTimeoutSeconds": 180
   },
   "issues": {
