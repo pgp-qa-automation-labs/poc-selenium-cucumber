@@ -181,7 +181,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     C["1 · Compilar"]
-    REG["2 · Pruebas de regresión<br/>self-healing, reintento y evidencia"]
+    REG["2 · Pruebas de regresión<br/>self-healing, reintento, evidencia<br/>y línea base"]
     DEMO["2 · Demo self-healing<br/>opcional"]
     PR["3 · PR de corrección<br/>si hubo una reparación real"]
     TRI["3 · Evaluación de triage<br/>si hubo fallos: agrupa, tope, agente"]
@@ -203,7 +203,7 @@ flowchart TD
 | Etapa | Cuándo corre | Usa IA | Puede escribir |
 |---|---|---|---|
 | 1 · Compilar | Siempre | No | No |
-| 2 · Pruebas de regresión | Siempre | Solo si un selector falla (self-healing) | No |
+| 2 · Pruebas de regresión | Siempre | Solo si un selector falla (self-healing) | Guarda las líneas base en el caché de Actions |
 | 2 · Demo self-healing | Solo si marcas la casilla al lanzar a mano | Sí | No |
 | 3 · PR de corrección | Si el self-healing reparó un selector por un cambio real | No | Abre un PR |
 | 3 · Evaluación de triage | Si algún escenario falló (aunque sea inestable) | Solo para fallos consistentes, hasta el tope | Sube las capturas a `triage-evidencias` |
@@ -211,6 +211,7 @@ flowchart TD
 | 4 · Tarea en (gestor) | Si se abrió el PR de corrección y se eligió Jira o Azure DevOps | No | Crea o comenta una tarea de mantenimiento |
 
 - **Cada etapa se comunica con la siguiente mediante archivos** (el paquete de evidencia y `triage-report.json`). Por eso se puede cambiar el prompt del agente, agregar un gestor o reprocesar evidencia sin tocar las pruebas.
+- **La línea base viaja entre ejecuciones con el caché de Actions:** la etapa 2 recupera la última antes de probar y guarda la actualizada al terminar. La primera ejecución de una rama no tiene con qué comparar; desde la segunda, sí.
 - **Las etapas 4 corren en paralelo,** y si una falla, las demás siguen. Las que no elegiste no aparecen.
 
 ### Tareas de mantenimiento por reparaciones del self-healing
