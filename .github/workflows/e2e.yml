@@ -81,6 +81,14 @@ jobs:
       - name: Despertar API del ambiente
         run: bash .github/scripts/warmup.sh "$TEST_ENV"
 
+      # Línea base: cómo se veía cada pantalla en la última ejecución exitosa. El triage compara los fallos contra ella.
+      - name: Recuperar líneas base de la última ejecución exitosa
+        uses: actions/cache/restore@v4
+        with:
+          path: .lineas-base
+          key: lineas-base-${{ env.TEST_ENV }}-${{ github.run_id }}
+          restore-keys: lineas-base-${{ env.TEST_ENV }}-
+
       # Aquí solo se prueba: cada escenario fallido se reintenta una vez y, si vuelve a fallar, se guarda su
       # paquete de evidencia (captura, HTML, consola, red). El diagnóstico es la etapa 3.
       # CI=true lo define GitHub Actions: ConfigReader fuerza headless automáticamente.
@@ -138,6 +146,13 @@ jobs:
             target/cucumber-reports/
             target/healing/
           if-no-files-found: ignore
+
+      - name: Guardar líneas base actualizadas
+        if: always() && hashFiles('.lineas-base/**') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .lineas-base
+          key: lineas-base-${{ env.TEST_ENV }}-${{ github.run_id }}
 
       - name: Publicar paquetes de evidencia
         if: always() && steps.evidencia.outputs.hay_evidencia == 'true'

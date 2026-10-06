@@ -23,6 +23,7 @@
         <testng.version>7.12.0</testng.version>
         <anthropic.version>2.68.0</anthropic.version>
         <jackson.version>2.22.3</jackson.version>
+        <java-diff-utils.version>4.17</java-diff-utils.version>
         <assertj.version>3.27.7</assertj.version>
         <slf4j.version>2.0.17</slf4j.version>
 
@@ -53,6 +54,12 @@
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
             <version>${jackson.version}</version>
+        </dependency>
+        <!-- Diferencias entre el HTML de la última ejecución exitosa y el del fallo (triage) -->
+        <dependency>
+            <groupId>io.github.java-diff-utils</groupId>
+            <artifactId>java-diff-utils</artifactId>
+            <version>${java-diff-utils.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

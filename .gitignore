@@ -12,3 +12,6 @@ out/
 # Logs y secretos locales
 *.log
 .env
+
+# Líneas base del triage (en CI viven en el caché de Actions)
+.lineas-base/

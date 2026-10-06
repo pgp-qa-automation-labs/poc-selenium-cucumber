@@ -4,6 +4,7 @@ import cl.guzman.automation.config.ConfigReader;
 import cl.guzman.automation.config.EnvironmentConfig;
 import cl.guzman.automation.driver.DriverFactory;
 import cl.guzman.automation.driver.DriverManager;
+import cl.guzman.automation.evidencia.LineaBase;
 import cl.guzman.automation.evidencia.RecolectorEvidencia;
 import cl.guzman.automation.healing.HealingReport;
 import cl.guzman.automation.healing.Reparacion;
@@ -18,6 +19,7 @@ import cl.guzman.automation.utils.ScreenshotUtils;
 import cl.guzman.automation.utils.WarmUpUtils;
 import io.cucumber.java.After;
 import io.cucumber.java.AfterAll;
+import io.cucumber.java.AfterStep;
 import io.cucumber.java.Before;
 import io.cucumber.java.BeforeAll;
 import io.cucumber.java.Scenario;
@@ -115,6 +117,20 @@ public class Hooks {
         }
     }
 
+    /**
+     * Después de cada paso aprobado se registra el estado de la página: si el escenario termina aprobado,
+     * pasa a ser la línea base con la que el triage compara futuros fallos.
+     */
+    @AfterStep
+    public void registrarLineaBase(Scenario scenario) {
+        List<FalloEscenario.Paso> pasos = PasosListener.actual().pasos();
+        if (esSimulado(scenario) || pasos.isEmpty() || !"PASSED".equals(pasos.get(pasos.size() - 1).estado())
+                || !DriverManager.hasDriver()) {
+            return;
+        }
+        LineaBase.registrarPaso(DriverManager.getDriver(), pasos.stream().map(FalloEscenario.Paso::texto).toList());
+    }
+
     @After
     public void cerrarNavegador(Scenario scenario) {
         try {
@@ -122,7 +138,13 @@ public class Hooks {
                 byte[] captura = ScreenshotUtils.capturar(DriverManager.getDriver());
                 scenario.attach(captura, "image/png", scenario.getName());
                 guardarEvidencia(scenario, captura);
-            } else if (!scenario.isFailed() && INTENTOS.getOrDefault(idEstable(scenario), 1) > 1) {
+            }
+            if (!scenario.isFailed() && !esSimulado(scenario)) {
+                LineaBase.confirmar();
+            } else {
+                LineaBase.descartar();
+            }
+            if (!scenario.isFailed() && INTENTOS.getOrDefault(idEstable(scenario), 1) > 1) {
                 RecolectorEvidencia.marcarInestable(scenario.getName(), idEstable(scenario));
                 LOG.warn("Escenario inestable: '{}' falló y luego pasó en un reintento", scenario.getName());
                 scenario.log("⚠️ Escenario inestable: falló y pasó en un reintento. No se investiga ni se crea un issue.");
@@ -172,7 +194,13 @@ public class Hooks {
                 driver.getTitle(),
                 INTENTOS.getOrDefault(idEstable(scenario), 1));
         Path directorio = RecolectorEvidencia.guardar(driver, idEstable(scenario), fallo, captura);
-        LOG.info("Evidencia del fallo guardada en {}", directorio);
+        List<String> pasosPrevios = ejecucion.pasos().stream()
+                .takeWhile(p -> "PASSED".equals(p.estado()))
+                .map(FalloEscenario.Paso::texto)
+                .toList();
+        boolean conLineaBase = LineaBase.copiarA(directorio, pasosPrevios);
+        LOG.info("Evidencia del fallo guardada en {} ({})", directorio,
+                conLineaBase ? "con línea base de la última ejecución exitosa" : "sin línea base previa");
     }
 
     /**

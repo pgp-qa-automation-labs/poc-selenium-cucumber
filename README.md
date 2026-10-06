@@ -47,12 +47,12 @@ flowchart TD
         SEL{"¿El elemento<br/>aparece?"}
         VAL{"¿La validación<br/>se cumple?"}
         MAS{"¿Quedan pasos?"}
-        OK["Escenario aprobado"]
+        OK["Escenario aprobado:<br/>guardar línea base"]
         FALLA["Escenario fallido:<br/>captura de pantalla"]
         REIN{"¿Es el primer<br/>intento?"}
         PASA{"¿Pasó en<br/>el reintento?"}
         INEST(((Inestable:<br/>se informa)))
-        EVI(((Fallido: guardar<br/>paquete de evidencia)))
+        EVI(((Fallido: guardar evidencia<br/>+ línea base previa)))
         FIN(((Aprobado)))
     end
     subgraph SH["Self-healing · IA"]
@@ -78,6 +78,7 @@ flowchart TD
 - **Si todo funciona, no se consulta a la IA**, así que no hay costo.
 - **El self-healing actúa durante la prueba** para que un cambio cosmético no la detenga.
 - **El reintento separa lo inestable de lo consistente.** Una falla momentánea (un servidor que despierta, una dependencia lenta) no llega al agente ni crea issues.
+- **Línea base:** cuando un escenario real (no simulado) pasa, se guarda cómo se veía la página después de cada paso (HTML y captura). Si más adelante un escenario falla, su evidencia incluye la pantalla de la **última ejecución exitosa en el mismo punto del flujo**, aunque sea de otro escenario que compartía los mismos pasos previos. En GitHub Actions las líneas base se conservan entre ejecuciones con el caché de Actions.
 - **La prueba no espera al agente:** guarda la evidencia y termina. El diagnóstico es un paso aparte, que puede repetirse sin volver a probar.
 
 ### 2. Cómo investiga el agente de triage
@@ -99,7 +100,7 @@ flowchart LR
         DIAG["Registrar el diagnóstico"]
     end
     subgraph HE["Herramientas · solo lectura"]
-        TOOL["HTML, consola o red<br/>guardados, o API ahora"]
+        TOOL["HTML, consola o red guardados,<br/>diferencias con la línea base<br/>o API ahora"]
     end
     LISTA --> GRUPO --> TOPE
     TOPE -->|no| SKIP
@@ -115,10 +116,11 @@ flowchart LR
 
 | Herramienta | Qué revisa | Qué le permite concluir |
 |---|---|---|
-| Captura (siempre incluida) | Lo que veía el usuario al fallar | Qué falta o qué se ve mal en pantalla |
+| Captura (siempre incluida) | Lo que veía el usuario al fallar y, si existe, la misma pantalla en la última ejecución exitosa | Qué falta o qué se ve mal en pantalla, comparado con cuando funcionaba |
 | `LeerHtml` | El HTML visible guardado al fallar | Si un elemento existía, estaba oculto o cambió |
 | `LeerConsola` | La consola del navegador guardada al fallar | Si el front tuvo un error propio de JavaScript |
 | `LeerRed` | Las llamadas del navegador a la API y lo que recibió **en ese momento** (200, 503, fallida) | Fallas del backend que una consulta posterior ya no reproduce, y errores que el front oculta |
+| `CompararConEjecucionExitosa` | Las diferencias del HTML entre la última ejecución exitosa y el fallo, en el mismo punto del flujo | **Qué cambió exactamente** (un botón que se ocultó, un texto distinto). Si no cambió nada, la causa está fuera del front |
 | `ConsultarApi` | Un `GET` a la API ahora (solo rutas `/api/...`) | Si el backend responde **ahora**, para contrastarlo con lo que vio el navegador |
 | `RegistrarDiagnostico` | — | Cierra la investigación con el diagnóstico |
 
@@ -130,6 +132,8 @@ flowchart LR
 | Severidad | `ALTA` (bloquea un flujo para usuarios reales), `MEDIA`, `BAJA` (solo afecta la automatización) |
 | Área responsable | `FRONTEND`, `BACKEND`, `INFRAESTRUCTURA`, `QA` |
 | Además | Título, causa probable, evidencias concretas, acción recomendada, confianza (0 a 100), escenarios afectados y captura |
+
+**Por qué la línea base sube la confianza:** sin ella, el agente ve el fallo y deduce qué debería haber en pantalla. Con ella, ve **antes y después**. En la prueba con el botón de búsqueda oculto, el agente citó el cambio exacto del HTML (`<button ...>BUSCAR</button>` pasó a un botón oculto y sin texto), comparó ambas capturas y descartó el backend con la red y la consola: diagnóstico `BUG_APLICACION · FRONTEND` con 88% de confianza.
 
 En el log del pipeline, cada investigación es una sección plegable con cada herramienta que usó el agente:
 
@@ -262,6 +266,7 @@ triage-evidencias
 5. **Revisa el resultado:**
    - `target/cucumber-reports/cucumber.html`: los escenarios con sus intentos y capturas.
    - `target/evidencia/`: el paquete de evidencia de cada escenario fallido.
+   - `.lineas-base/`: las pantallas de la última ejecución exitosa (no se sube a git). Para que un fallo tenga con qué compararse, antes debe haber pasado algún escenario con los mismos pasos previos.
    - `target/triage/triage-report.md`: los diagnósticos, los inestables y lo no investigado.
    - `target/issues/github/`: la **vista previa** del issue que se habría creado.
 6. **Reprocesa la evidencia sin volver a probar** (por ejemplo, después de ajustar el agente):
@@ -322,7 +327,7 @@ El consumo real se ve en la [Claude Console](https://platform.claude.com/) → *
 src/main/java/cl/guzman/automation/
 ├── config/        ConfigReader y EnvironmentConfig
 ├── driver/        DriverFactory y DriverManager (consola y red del navegador habilitadas)
-├── evidencia/     PaqueteEvidencia, RecolectorEvidencia, AgrupadorFallos
+├── evidencia/     PaqueteEvidencia, RecolectorEvidencia, AgrupadorFallos, LineaBase (última ejecución exitosa)
 ├── healing/       Self-healing: Locator, HealingEngine, ClaudeLocatorAdvisor, DomSnapshot, HealingReport, LocatorPatcher
 ├── triage/        TriageAgent y sus herramientas, EvaluadorTriage, EvaluarTriage, Diagnostico, TriageReport
 ├── issues/        IssueTracker y conectores (GitHub, Jira, Azure DevOps), ContenidoIssue, IssuePublisher, PublicarIssues,

@@ -47,7 +47,9 @@ public class TriageAgent {
             Recibirás el escenario, los pasos ejecutados, el error del paso fallido, los intentos de self-healing
             (reparación automática de locators con IA) y una captura de pantalla del navegador en el momento del fallo.
             Con las herramientas puedes revisar la evidencia guardada en ese momento (HTML, consola y red del navegador)
-            y consultar la API del backend ahora. Si otros escenarios fallaron con la misma evidencia, se te indican:
+            y consultar la API del backend ahora. Si existe una ejecución exitosa previa en el mismo punto del flujo
+            (línea base), recibirás también su captura y podrás comparar su HTML con el del fallo: es la mejor evidencia
+            de QUÉ cambió en la página. Si otros escenarios fallaron con la misma evidencia, se te indican:
             el diagnóstico debe explicar la causa común.
 
             Cómo investigar:
@@ -58,6 +60,9 @@ public class TriageAgent {
               esos errores sin escribir nada en la consola.
             - Usa la consulta directa a la API para saber si el backend responde AHORA; contrástala con la red del navegador.
             - Si el self-healing rechazó una reparación, su razón es una pista fuerte sobre un cambio de la UI.
+            - Si hay línea base, compárala: un elemento que antes estaba visible y ahora no, o un texto que cambió,
+              es evidencia directa. Si la página es igual a la de la línea base, la causa probablemente está fuera
+              del front (datos, backend o la propia prueba).
             - Distingue con cuidado entre un defecto de la aplicación y un problema de la automatización.
             - No inventes hechos: cada evidencia debe venir de lo que viste o de lo que devolvió una herramienta.
 
@@ -93,13 +98,24 @@ public class TriageAgent {
         TriageContext.iniciar(evidencia, config);
         try {
             byte[] capturaPng = Files.exists(evidencia.captura()) ? Files.readAllBytes(evidencia.captura()) : null;
+            byte[] capturaBase = Files.exists(evidencia.capturaLineaBase()) ? Files.readAllBytes(evidencia.capturaLineaBase()) : null;
             List<BetaContentBlockParam> contenido = new ArrayList<>();
-            contenido.add(BetaContentBlockParam.ofText(describir(fallo, escenariosAfectados)));
+            contenido.add(BetaContentBlockParam.ofText(describir(fallo, escenariosAfectados, capturaBase != null)));
             if (capturaPng != null && capturaPng.length > 0) {
                 contenido.add(BetaContentBlockParam.ofImage(BetaImageBlockParam.builder()
                         .source(BetaBase64ImageSource.builder()
                                 .mediaType(BetaBase64ImageSource.MediaType.IMAGE_PNG)
                                 .data(Base64.getEncoder().encodeToString(capturaPng))
+                                .build())
+                        .build()));
+            }
+            if (capturaBase != null) {
+                contenido.add(BetaContentBlockParam.ofText(
+                        "Captura de la última ejecución exitosa en el mismo punto del flujo (línea base), para comparar:"));
+                contenido.add(BetaContentBlockParam.ofImage(BetaImageBlockParam.builder()
+                        .source(BetaBase64ImageSource.builder()
+                                .mediaType(BetaBase64ImageSource.MediaType.IMAGE_PNG)
+                                .data(Base64.getEncoder().encodeToString(capturaBase))
                                 .build())
                         .build()));
             }
@@ -112,6 +128,7 @@ public class TriageAgent {
                     .addTool(LeerHtml.class, JsonSchemaLocalValidation.NO)
                     .addTool(LeerConsola.class, JsonSchemaLocalValidation.NO)
                     .addTool(LeerRed.class, JsonSchemaLocalValidation.NO)
+                    .addTool(CompararConEjecucionExitosa.class, JsonSchemaLocalValidation.NO)
                     .addTool(ConsultarApi.class)
                     .addTool(RegistrarDiagnostico.class)
                     .addUserMessageOfBetaContentBlockParams(contenido)
@@ -162,7 +179,7 @@ public class TriageAgent {
         return Optional.empty();
     }
 
-    private String describir(FalloEscenario fallo, List<String> escenariosAfectados) {
+    private String describir(FalloEscenario fallo, List<String> escenariosAfectados, boolean hayLineaBase) {
         String pasos = fallo.pasos().stream()
                 .map(p -> "- [" + p.estado() + "] " + p.texto())
                 .collect(Collectors.joining("\n"));
@@ -194,7 +211,7 @@ public class TriageAgent {
                 %s
                 </otros_escenarios_con_la_misma_evidencia>
 
-                Se adjunta la captura de pantalla del navegador al momento del fallo.
+                Se adjunta la captura de pantalla del navegador al momento del fallo%s.
                 """.formatted(
                 fallo.escenario(), fallo.feature(), String.join(" ", fallo.tags()),
                 fallo.ambiente(), config.app().baseUrl(), config.app().apiUrl(),
@@ -203,6 +220,8 @@ public class TriageAgent {
                 fallo.reparacionesHealing().isBlank() ? "Sin intentos de self-healing en este escenario." : fallo.reparacionesHealing(),
                 escenariosAfectados.size() > 1
                         ? escenariosAfectados.stream().skip(1).map(e -> "- " + e).collect(Collectors.joining("\n"))
-                        : "Ninguno.");
+                        : "Ninguno.",
+                hayLineaBase ? " y la de la última ejecución exitosa en el mismo punto (línea base)"
+                        : ". No hay una ejecución exitosa previa con los mismos pasos (sin línea base)");
     }
 }

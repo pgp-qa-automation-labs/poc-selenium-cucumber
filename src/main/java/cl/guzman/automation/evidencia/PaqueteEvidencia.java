@@ -20,6 +20,7 @@ import java.nio.file.Path;
  *   consola.txt   consola del navegador
  *   red.txt       peticiones de datos del navegador y su resultado
  *   estado.txt    FALLIDO o INESTABLE (pasó en un reintento)
+ *   base-*        línea base: la misma pantalla en la última ejecución exitosa (si existe, ver LineaBase)
  * </pre>
  */
 public record PaqueteEvidencia(Path directorio, FalloEscenario fallo, Estado estado) {
@@ -45,6 +46,27 @@ public record PaqueteEvidencia(Path directorio, FalloEscenario fallo, Estado est
 
     public String red() {
         return leer("red.txt");
+    }
+
+    /**
+     * Captura de la última ejecución exitosa en el estado previo al paso fallido (puede no existir).
+     */
+    public Path capturaLineaBase() {
+        return directorio.resolve("base-captura.png");
+    }
+
+    /**
+     * HTML de la última ejecución exitosa en el estado previo al paso fallido; vacío si no hay línea base.
+     */
+    public String htmlLineaBase() {
+        return leer("base-html.txt");
+    }
+
+    /**
+     * Fecha, URL y pasos de la línea base (JSON); vacío si no hay línea base.
+     */
+    public String infoLineaBase() {
+        return leer("base.json");
     }
 
     private String leer(String archivo) {
