@@ -12,6 +12,8 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.text.Normalizer;
+import java.util.Locale;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +25,7 @@ import java.util.stream.Stream;
  *   <li>descarta los escenarios inestables (pasaron en un reintento),</li>
  *   <li>agrupa los fallos consistentes que comparten la misma evidencia,</li>
  *   <li>investiga con el agente un escenario por grupo, hasta el tope configurado,</li>
- *   <li>deja la captura de cada grupo en target/triage/capturas/&lt;huella&gt;.png.</li>
+ *   <li>deja la captura de cada grupo en target/triage/capturas/&lt;huella&gt;_&lt;escenario&gt;.png.</li>
  * </ol>
  */
 public final class EvaluadorTriage {
@@ -77,6 +79,15 @@ public final class EvaluadorTriage {
     }
 
     /**
+     * Nombre legible para archivos: "Buscar departamentos en Ñuñoa" queda como "buscar-departamentos-en-nunoa".
+     */
+    private static String slug(String texto) {
+        String sinTildes = Normalizer.normalize(texto == null ? "" : texto, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        String slug = sinTildes.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+        return slug.length() > 60 ? slug.substring(0, 60).replaceAll("-$", "") : slug;
+    }
+
+    /**
      * Los resultados son de esta evaluación: un triage-report.json anterior no debe publicarse por error.
      */
     private static void limpiarResultadosAnteriores() {
@@ -96,7 +107,7 @@ public final class EvaluadorTriage {
         if (!Files.exists(evidencia.captura())) {
             return diagnostico;
         }
-        String archivo = diagnostico.huella() + ".png";
+        String archivo = diagnostico.huella() + "_" + slug(diagnostico.escenario()) + ".png";
         try {
             Files.createDirectories(CAPTURAS);
             Files.copy(evidencia.captura(), CAPTURAS.resolve(archivo), StandardCopyOption.REPLACE_EXISTING);

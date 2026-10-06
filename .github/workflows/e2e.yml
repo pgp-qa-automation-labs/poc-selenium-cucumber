@@ -240,8 +240,6 @@ jobs:
     outputs:
       hay_diagnosticos: ${{ steps.resultado.outputs.hay_diagnosticos }}
       gestores: ${{ steps.resultado.outputs.gestores }}
-    env:
-      EVIDENCIAS_URL_BASE: https://raw.githubusercontent.com/${{ github.repository }}/triage-evidencias/${{ github.run_id }}
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -254,6 +252,16 @@ jobs:
         with:
           name: evidencia
           path: evidencia
+
+      # Carpeta legible para las capturas de esta ejecución: <fecha>_run-<número>_<rama>.
+      # Se define antes del triage para que los issues apunten a la URL donde quedará cada imagen.
+      - name: Definir carpeta de evidencias
+        run: |
+          carpeta="$(date -u +%F)_run-${GITHUB_RUN_NUMBER}_${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          carpeta="${carpeta//\//-}"
+          echo "CARPETA_EVIDENCIAS=$carpeta" >> "$GITHUB_ENV"
+          echo "EVIDENCIAS_URL_BASE=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${RAMA_EVIDENCIAS}/$carpeta" >> "$GITHUB_ENV"
+          echo "Carpeta de evidencias: $carpeta"
 
       # Descarta los inestables, agrupa los fallos con la misma causa, respeta el tope de investigaciones
       # y el agente investiga un escenario por grupo. Cada investigación es una sección plegable del log.
@@ -270,23 +278,7 @@ jobs:
         if: hashFiles('target/triage/capturas/*.png') != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          dir="$RUNNER_TEMP/evidencias"
-          git init -q "$dir" && cd "$dir"
-          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git fetch -q --depth 1 origin "$RAMA_EVIDENCIAS" 2>/dev/null; then
-            git checkout -q -b "$RAMA_EVIDENCIAS" FETCH_HEAD
-          else
-            git checkout -q --orphan "$RAMA_EVIDENCIAS"
-            printf '# Evidencias del triage\n\nCapturas de los fallos diagnosticados por el pipeline, una carpeta por ejecución.\nRama generada automáticamente: no contiene código.\n' > README.md
-          fi
-          mkdir -p "$GITHUB_RUN_ID"
-          cp "$GITHUB_WORKSPACE"/target/triage/capturas/*.png "$GITHUB_RUN_ID"/
-          git add -A
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -qm "Evidencias del run $GITHUB_RUN_ID"
-          git push -q origin "$RAMA_EVIDENCIAS"
-          echo "Capturas publicadas en la rama $RAMA_EVIDENCIAS, carpeta $GITHUB_RUN_ID"
+        run: bash .github/scripts/publicar-evidencias.sh
 
       - name: Decidir publicación
         id: resultado

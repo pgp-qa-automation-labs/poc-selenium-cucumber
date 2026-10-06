@@ -169,7 +169,7 @@ flowchart TD
 ```
 
 - **Huella:** se calcula a partir de la evidencia del grupo (la llamada que falló, o el paso y el error), **no de la clasificación de la IA**. Así, aunque el agente clasifique el mismo fallo de forma distinta otro día, se comenta el issue existente en vez de abrir otro.
-- **La captura en cada gestor:** **Jira** y **Azure DevOps** la reciben como **archivo adjunto**. La API de issues de **GitHub** no acepta adjuntos: la captura se publica en la rama `triage-evidencias` y se muestra **dentro del issue** como imagen.
+- **La captura en cada gestor:** **Jira** y **Azure DevOps** la reciben como **archivo adjunto**. La API de issues de **GitHub** no acepta adjuntos: la captura se publica en la rama `triage-evidencias` y se muestra **dentro del issue** como imagen (ver [Rama de evidencias](#rama-de-evidencias)).
 - **Qué se envía:** título, severidad, categoría, área, confianza, causa, evidencias, acción recomendada, escenarios afectados, paso, URL, ambiente, rama/commit, enlace a la ejecución y la captura. **No se envía:** el HTML, la consola ni ningún secreto.
 
 ### 4. Flujo del pipeline (GitHub Actions)
@@ -205,6 +205,21 @@ flowchart TD
 
 - **Cada etapa se comunica con la siguiente mediante archivos** (el paquete de evidencia y `triage-report.json`). Por eso se puede cambiar el prompt del agente, agregar un gestor o reprocesar evidencia sin tocar las pruebas.
 - **Las etapas 4 corren en paralelo,** y si una falla, las demás siguen. Las que no elegiste no aparecen.
+
+### Rama de evidencias
+
+La API de issues de GitHub solo acepta texto, pero un issue puede **mostrar** una imagen si tiene un enlace público. Por eso la etapa 3 guarda las capturas en una rama del mismo repo que funciona como carpeta de fotos: `triage-evidencias`. **No tiene código**, no comparte historial con las demás ramas y nunca se mezcla con ellas. La crea y la llena el pipeline.
+
+```
+triage-evidencias
+├── README.md
+└── 2026-10-06_run-11_feature-agentes-ia/                          ← fecha · número de run (el de la pestaña Actions) · rama
+      ├── README.md                                                ← índice: enlace a la ejecución, commit y tabla de capturas
+      └── ef20d432468a_buscar-departamentos-en-venta-en-nunoa.png  ← huella del fallo + escenario
+```
+
+- **Se acumula, no se sobrescribe:** cada issue apunta a la captura de su ejecución. Si se sobrescribiera, un issue antiguo mostraría la imagen de otro día.
+- **Crecimiento:** cada fallo diagnosticado suma una imagen de 1 a 2 MB, y en git borrar archivos no reduce el tamaño (quedan en el historial). Para esta POC no es un problema. Si el volumen creciera, la mejora prevista es una **retención automática**: conservar solo las carpetas de los últimos 90 días (el mismo plazo en que GitHub borra los artefactos de cada ejecución) y recrear la rama sin historial en cada publicación. Las capturas más antiguas dejarían de verse en sus issues, pero el texto del diagnóstico se mantiene.
 
 ## Paso a paso para usarlo
 
@@ -312,6 +327,7 @@ src/test/java/cl/guzman/automation/
 .github/
 ├── actions/preparar-entorno/   Acción compuesta común (Java 17 + caché de Maven)
 ├── scripts/warmup.sh            Despierta la API leyendo el JSON del ambiente
+├── scripts/publicar-evidencias.sh   Sube las capturas a la rama triage-evidencias con su índice
 └── workflows/e2e.yml            Pipeline de 4 etapas
 ```
 
