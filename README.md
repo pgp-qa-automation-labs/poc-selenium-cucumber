@@ -21,6 +21,7 @@ Esta rama lo resuelve así:
 | **`feature/self-healing-ia`** (esta) | **Self-healing:** si un elemento cambia, la IA lo encuentra, la prueba continúa y se propone un PR que corrige el código | Sí (consulta directa) |
 | [`feature/agentes-ia`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/feature/agentes-ia) | **Agente de triage:** cuando una prueba falla, un agente investiga la causa y crea un issue en GitHub, Jira o Azure DevOps | Sí (agente) |
 | [`demo/locator-obsoleto`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/demo/locator-obsoleto) | Rama de demostración del PR automático: tiene un selector obsoleto a propósito | — |
+| [`triage-evidencias`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/triage-evidencias) | Generada por el pipeline de `feature/agentes-ia`: guarda las capturas que muestran los issues de GitHub. No contiene código | — |
 
 ## Cómo funciona
 
