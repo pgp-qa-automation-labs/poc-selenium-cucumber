@@ -39,6 +39,12 @@ public abstract class BasePage {
         elemento.click();
     }
 
+    protected void escribir(By locator, String texto) {
+        WebElement elemento = esperarVisible(locator);
+        elemento.clear();
+        elemento.sendKeys(texto);
+    }
+
     protected String obtenerTexto(By locator) {
         return esperarVisible(locator).getText().trim();
     }

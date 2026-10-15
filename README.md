@@ -11,6 +11,8 @@ Abre un navegador y hace **exactamente lo que haría un cliente** en el sitio [G
 3. Revisa que el listado tenga resultados y que **todas** las propiedades estén en Ñuñoa.
 4. Abre la primera propiedad y verifica que el detalle muestre **el mismo título, ubicación, precio y código** que la tarjeta del listado, además de dormitorios y baños.
 
+Además, prueba el **login de clientes** con 3 clientes distintos: uno que quiere comprar una propiedad y dos que consultan por propiedades. Cada uno es **nuevo en cada ejecución**: antes del escenario se genera un usuario y una contraseña aleatorios con [Datafaker](https://www.datafaker.net/) (nombres chilenos realistas), se registra por API y luego el escenario inicia sesión por la interfaz y verifica el saludo del portal con su nombre.
+
 Si algo no se cumple, la prueba falla y deja una **captura de pantalla** del momento exacto del error.
 
 El escenario está escrito en lenguaje de negocio ([`busqueda_propiedad.feature`](src/test/resources/features/busqueda_propiedad.feature)):
@@ -24,6 +26,23 @@ Scenario: Buscar un departamento en venta en Ñuñoa y revisar su detalle
   Then ve el listado "Propiedades en Venta" con al menos 1 resultado
   ...
 ```
+
+Y el login, como **Scenario Outline** que se ejecuta una vez por cliente ([`login_cliente.feature`](src/test/resources/features/login_cliente.feature)):
+
+```gherkin
+Scenario Outline: Un cliente que <intencion> inicia sesión en el portal
+  Given que existe un cliente nuevo que "<intencion>"
+  When inicia sesión con su usuario y contraseña
+  Then ve el portal de clientes con su nombre
+
+  Examples:
+    | intencion                              |
+    | quiere comprar una propiedad           |
+    | consulta por una propiedad             |
+    | consulta por una propiedad en arriendo |
+```
+
+Los datos del cliente no van en la tabla: los crea un **fixture** (hook `@Before("@login")`) usando `GeneradorDatos.clienteAleatorio()` y los deja en el contexto del escenario.
 
 ## Ramas del repositorio
 
@@ -149,19 +168,22 @@ src/test/resources/config/
 src/main/java/cl/guzman/automation/
 ├── config/        ConfigReader y EnvironmentConfig
 ├── driver/        DriverFactory y DriverManager (un navegador por hilo)
-├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage
+├── api/           ClientesApi (registro de clientes para preparar datos)
+├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage, LoginPage, PortalClientePage
 ├── components/    TarjetaPropiedad
-├── model/         Propiedad
-└── utils/         TextUtils, ScreenshotUtils, WarmUpUtils
+├── model/         Propiedad, Cliente
+└── utils/         TextUtils, ScreenshotUtils, WarmUpUtils, GeneradorDatos (Datafaker)
 
 src/test/java/cl/guzman/automation/
 ├── context/       TestContext (estado compartido entre steps, vía PicoContainer)
-├── hooks/         Hooks (despertar API, abrir/cerrar navegador, captura al fallar)
+├── hooks/         Hooks (despertar API, abrir/cerrar navegador, captura al fallar) y ClienteFixture (cliente aleatorio para @login)
 ├── runners/       TestRunner (TestNG)
-└── steps/         NavegacionSteps, BusquedaPropiedadSteps, DetallePropiedadSteps
+└── steps/         NavegacionSteps, BusquedaPropiedadSteps, DetallePropiedadSteps, LoginSteps
 
 src/test/resources/features/   escenarios Gherkin (palabras clave en inglés, pasos en español)
 ```
 
 ## Notas
+
+- **Usuarios de prueba:** cada ejecución del login registra 3 clientes reales en el ambiente, con usuario que empieza por `qa_auto_` para identificarlos y limpiarlos desde la base. El backend limita los registros por IP: si se ejecuta muchas veces seguidas puede responder *429 Demasiados intentos*; en ese caso, espera unos minutos.
 - Si tienes un `chromedriver.exe` antiguo en el PATH, Maven lo ignora (`SE_SKIP_DRIVER_IN_PATH=true` en el `pom.xml`). Si ejecutas desde el IDE sin Maven, define esa variable de entorno en la configuración de ejecución.
