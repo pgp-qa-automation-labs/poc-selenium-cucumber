@@ -23,6 +23,7 @@
         <testng.version>7.12.0</testng.version>
         <jackson.version>2.22.3</jackson.version>
         <datafaker.version>2.7.0</datafaker.version>
+        <karate.version>1.5.2</karate.version>
         <assertj.version>3.27.7</assertj.version>
         <slf4j.version>2.0.17</slf4j.version>
 
@@ -85,10 +86,12 @@
             <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- Karate: llamadas a la API desde los fixtures (1.5.x funciona con Java 17; la 2.x exige Java 21).
+             Trae Logback como implementación de SLF4J, configurado en src/test/resources/logback-test.xml -->
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>${slf4j.version}</version>
+            <groupId>io.karatelabs</groupId>
+            <artifactId>karate-core</artifactId>
+            <version>${karate.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

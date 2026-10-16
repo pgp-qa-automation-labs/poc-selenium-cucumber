@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLA" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>[%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Karate registra cada request y response en DEBUG, incluida la contraseña del cliente de prueba.
+         Se limita a WARN para que no quede en los logs (que en CI son públicos). -->
+    <logger name="com.intuit.karate" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLA"/>
+    </root>
+</configuration>

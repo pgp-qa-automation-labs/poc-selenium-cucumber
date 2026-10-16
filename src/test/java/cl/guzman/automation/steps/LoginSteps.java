@@ -1,6 +1,7 @@
 package cl.guzman.automation.steps;
 
 import cl.guzman.automation.context.TestContext;
+import cl.guzman.automation.fixtures.ClienteFixture;
 import cl.guzman.automation.model.Cliente;
 import cl.guzman.automation.pages.LoginPage;
 import cl.guzman.automation.pages.PortalClientePage;
@@ -15,11 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class LoginSteps {
 
     private final TestContext context;
+    private final ClienteFixture clienteFixture;
     private Scenario scenario;
     private PortalClientePage portal;
 
-    public LoginSteps(TestContext context) {
+    public LoginSteps(TestContext context, ClienteFixture clienteFixture) {
         this.context = context;
+        this.clienteFixture = clienteFixture;
     }
 
     @Before("@login")
@@ -27,10 +30,10 @@ public class LoginSteps {
         this.scenario = scenario;
     }
 
-    @Given("que existe un cliente nuevo que {string}")
-    public void queExisteUnClienteNuevoQue(String intencion) {
-        Cliente cliente = context.getCliente();
-        scenario.log("Intención del cliente " + cliente.usuario() + ": " + intencion);
+    @Given("que existe un cliente {string} que cumple el criterio para iniciar sesión")
+    public void queExisteUnClienteQueCumpleElCriterio(String perfil) {
+        String motivo = clienteFixture.prepararCliente(perfil);
+        scenario.log("Cliente de prueba: " + context.getCliente().usuario() + " · " + motivo);
     }
 
     @When("inicia sesión con su usuario y contraseña")

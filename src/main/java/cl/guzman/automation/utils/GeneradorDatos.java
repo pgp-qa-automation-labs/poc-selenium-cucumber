@@ -20,7 +20,7 @@ public final class GeneradorDatos {
 
     /**
      * Cliente con nombre real, usuario único y contraseña válida para el registro del portal
-     * (usuario: solo letras, números, puntos y guiones bajos; contraseña: mínimo 6 caracteres).
+     * (usuario: solo letras, números, puntos y guiones bajos; contraseña: mínimo 8, con letras y números).
      */
     public static Cliente clienteAleatorio() {
         String nombre = FAKER.name().firstName();
@@ -28,7 +28,9 @@ public final class GeneradorDatos {
         String usuario = PREFIJO_USUARIO
                 + TextUtils.normalizar(nombre).replaceAll("[^a-z0-9]", "")
                 + "_" + FAKER.number().digits(6);
-        String password = FAKER.credentials().password(10, 14, true, false, true);
+        // Datafaker permite dígitos pero no los garantiza: se fuerza al menos una letra y un número
+        String password = FAKER.credentials().password(8, 12, true, false, true)
+                + FAKER.letterify("?") + FAKER.number().digit();
         return new Cliente(usuario, nombre + " " + apellido, password);
     }
 }

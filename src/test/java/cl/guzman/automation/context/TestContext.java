@@ -30,7 +30,7 @@ public class TestContext {
 
     public Cliente getCliente() {
         if (cliente == null) {
-            throw new IllegalStateException("No hay un cliente preparado: el escenario debe tener el tag @login");
+            throw new IllegalStateException("No hay un cliente preparado: el escenario debe pedirlo con el paso \"que existe un cliente ... que cumple el criterio\"");
         }
         return cliente;
     }

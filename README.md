@@ -1,6 +1,56 @@
-# Guzmán Corretaje — Automatización E2E con Selenium + Cucumber
+# Guzmán Corretaje — Selenium + Cucumber con fixtures de datos en Karate
 
-> **Rama `main`** · Automatización base, **sin IA**. Ejemplo de cómo construir pruebas E2E con **Selenium 4**, **Cucumber 7** y **TestNG** bajo **Page Object Model**.
+> **Rama `feature/karate-fixtures`** · Todo lo de [`main`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/main) + **fixtures que preparan los datos de prueba con Karate** antes de que el escenario de Selenium se ejecute. Es una prueba de concepto de cómo integrar **Karate, Selenium y Java** en el mismo proyecto.
+
+## El patrón que demuestra esta rama
+
+Antes de cada escenario, un **fixture** prepara los datos y decide si el escenario puede ejecutarse:
+
+```
+Examples (columna "perfil")
+        │  la fila indica QUÉ datos necesita el escenario
+        ▼
+ClienteFixture
+  1. Obtener datos        GeneradorDatos (Datafaker)        ← en un proyecto real: consulta a la base de datos
+  2. Validar por API      Karate: registrar_cliente.feature ← envía los datos y evalúa un criterio
+  3. ¿Cumple el criterio?
+        sí → guarda el cliente en el TestContext y el escenario continúa con Selenium
+        no → el escenario queda OMITIDO (skipped) con el motivo en el reporte
+```
+
+- **Karate y Cucumber conviven:** Cucumber ejecuta los features de `src/test/resources/features/` (UI con Selenium) y Karate los de `src/test/resources/karate/` (API). El fixture llama a Karate desde Java con `Runner.runFeature(...)`, le pasa los datos como variables y lee el resultado (`elegible` y `motivo`).
+- **La configuración es una sola:** la URL de la API sale de `env_<ambiente>.json` (Java) y se pasa a Karate; no hay un `karate-config.js` paralelo.
+- **Omitido no es fallido:** si los datos no cumplen el criterio, el escenario no corre y queda registrado por qué. Si Karate no alcanza a evaluar el criterio (un error técnico), el escenario **falla**, no se omite.
+- **Por qué el fixture lo llama un paso y no un hook:** un hook `@Before` se ejecuta antes de los pasos y no puede leer los valores de `Examples`. El paso `Given` sí recibe el perfil de la fila y se lo entrega al fixture.
+
+```gherkin
+Scenario Outline: Un cliente <perfil> inicia sesión en el portal
+  Given que existe un cliente "<perfil>" que cumple el criterio para iniciar sesión
+  When inicia sesión con su usuario y contraseña
+  Then ve el portal de clientes con su nombre
+
+  Examples: Clientes que cumplen el criterio
+    | perfil                 |
+    | que quiere comprar     |
+    | que consulta           |
+    | que consulta arriendos |
+
+  Examples: Cliente que no cumple el criterio (el escenario se omite)
+    | perfil             |
+    | sin consentimiento |
+```
+
+Resultado: **3 escenarios pasan** (registro por Karate + login por Selenium) y **1 queda omitido** con el motivo que devolvió la API: *HTTP 400 - Debes aceptar la Política de Privacidad para crear tu cuenta*.
+
+**Notas técnicas**
+- Se usa **Karate 1.5.2** porque funciona con **Java 17**; Karate 2.x exige Java 21.
+- Karate trae **Logback**, por eso esta rama no usa `slf4j-simple`. En `logback-test.xml` los logs de Karate quedan en `WARN`, porque en `DEBUG` imprimen cada request, incluida la contraseña del cliente de prueba.
+- El feature de Karate **no lleva `@ignore`**: Karate salta los features con esa etiqueta incluso cuando se invocan desde Java.
+- Siguiente paso previsto: agregar la consulta a la base de datos (Supabase) como origen de datos, con un usuario de solo lectura y la credencial en variables de entorno.
+
+---
+
+## Lo que viene de `main`
 
 ## ¿Qué hace esta rama?
 
@@ -11,7 +61,7 @@ Abre un navegador y hace **exactamente lo que haría un cliente** en el sitio [G
 3. Revisa que el listado tenga resultados y que **todas** las propiedades estén en Ñuñoa.
 4. Abre la primera propiedad y verifica que el detalle muestre **el mismo título, ubicación, precio y código** que la tarjeta del listado, además de dormitorios y baños.
 
-Además, prueba el **login de clientes** con 3 clientes distintos: uno que quiere comprar una propiedad y dos que consultan por propiedades. Cada uno es **nuevo en cada ejecución**: antes del escenario se genera un usuario y una contraseña aleatorios con [Datafaker](https://www.datafaker.net/) (nombres chilenos realistas), se registra por API y luego el escenario inicia sesión por la interfaz y verifica el saludo del portal con su nombre.
+Además, prueba el **login de clientes** con los datos que prepara el fixture de Karate (ver [El patrón que demuestra esta rama](#el-patrón-que-demuestra-esta-rama)).
 
 Si algo no se cumple, la prueba falla y deja una **captura de pantalla** del momento exacto del error.
 
@@ -27,32 +77,16 @@ Scenario: Buscar un departamento en venta en Ñuñoa y revisar su detalle
   ...
 ```
 
-Y el login, como **Scenario Outline** que se ejecuta una vez por cliente ([`login_cliente.feature`](src/test/resources/features/login_cliente.feature)):
-
-```gherkin
-Scenario Outline: Un cliente que <intencion> inicia sesión en el portal
-  Given que existe un cliente nuevo que "<intencion>"
-  When inicia sesión con su usuario y contraseña
-  Then ve el portal de clientes con su nombre
-
-  Examples:
-    | intencion                              |
-    | quiere comprar una propiedad           |
-    | consulta por una propiedad             |
-    | consulta por una propiedad en arriendo |
-```
-
-Los datos del cliente no van en la tabla: los crea un **fixture** (hook `@Before("@login")`) usando `GeneradorDatos.clienteAleatorio()` y los deja en el contexto del escenario.
-
 ## Ramas del repositorio
 
 Cada rama agrega un nivel sobre la anterior:
 
 | Rama | Qué agrega | IA |
 |---|---|---|
-| **`main`** (esta) | Automatización base: Selenium + Cucumber + TestNG con Page Object Model | No |
+| [`main`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/main) | Automatización base: Selenium + Cucumber + TestNG con Page Object Model | No |
 | [`feature/self-healing-ia`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/feature/self-healing-ia) | **Self-healing:** si un elemento de la página cambia, la IA lo encuentra, la prueba continúa y se propone un PR que corrige el código | Sí (consulta directa) |
 | [`feature/agentes-ia`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/feature/agentes-ia) | **Agente de triage:** cuando una prueba falla, un agente investiga la causa y crea un issue en GitHub, Jira o Azure DevOps | Sí (agente) |
+| **`feature/karate-fixtures`** (esta) | **Fixtures con Karate:** preparan y validan los datos por API antes del escenario de Selenium; si no cumplen el criterio, el escenario se omite | No |
 | [`demo/locator-obsoleto`](https://github.com/pgp-qa-automation-labs/poc-selenium-cucumber/tree/demo/locator-obsoleto) | Rama de demostración del PR automático del self-healing | — |
 
 ## Cómo funciona
@@ -168,7 +202,6 @@ src/test/resources/config/
 src/main/java/cl/guzman/automation/
 ├── config/        ConfigReader y EnvironmentConfig
 ├── driver/        DriverFactory y DriverManager (un navegador por hilo)
-├── api/           ClientesApi (registro de clientes para preparar datos)
 ├── pages/         BasePage, HomePage, ResultadosPage, DetallePropiedadPage, LoginPage, PortalClientePage
 ├── components/    TarjetaPropiedad
 ├── model/         Propiedad, Cliente
@@ -176,11 +209,13 @@ src/main/java/cl/guzman/automation/
 
 src/test/java/cl/guzman/automation/
 ├── context/       TestContext (estado compartido entre steps, vía PicoContainer)
-├── hooks/         Hooks (despertar API, abrir/cerrar navegador, captura al fallar) y ClienteFixture (cliente aleatorio para @login)
+├── fixtures/      ClienteFixture (prepara y valida el cliente con Karate) y PerfilCliente (perfiles de los Examples)
+├── hooks/         Hooks (despertar API, abrir/cerrar navegador, captura al fallar)
 ├── runners/       TestRunner (TestNG)
 └── steps/         NavegacionSteps, BusquedaPropiedadSteps, DetallePropiedadSteps, LoginSteps
 
-src/test/resources/features/   escenarios Gherkin (palabras clave en inglés, pasos en español)
+src/test/resources/features/   escenarios Gherkin de UI (Cucumber + Selenium)
+src/test/resources/karate/     features de API usados por los fixtures (Karate)
 ```
 
 ## Notas
