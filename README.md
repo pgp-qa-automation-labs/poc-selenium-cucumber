@@ -6,17 +6,14 @@
 
 Antes de cada escenario, un **fixture** prepara los datos y decide si el escenario puede ejecutarse:
 
-```
-Examples (columna "perfil")
-        │  la fila indica QUÉ datos necesita el escenario
-        ▼
-ClienteFixture
-  1. Obtener datos        GeneradorDatos (Datafaker)        ← en un proyecto real: consulta a la base de datos
-  2. Validar por API      Karate: registrar_cliente.feature ← envía los datos y evalúa un criterio
-  3. ¿Cumple el criterio?
-        sí → guarda el cliente en el TestContext y el escenario continúa con Selenium
-        no → el escenario queda OMITIDO (skipped) con el motivo en el reporte
-```
+1. **Obtener datos:** `GeneradorDatos` crea un cliente con Datafaker. *En un proyecto real, aquí va la consulta a la base de datos.*
+2. **Validar por API:** Karate (`registrar_cliente.feature`) envía los datos y evalúa un criterio.
+3. **¿Cumple el criterio?** Si cumple, el cliente queda en el `TestContext` y el escenario continúa con Selenium. Si no, el escenario queda **omitido** (*skipped*) con el motivo en el reporte.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/fixture-karate-dark.svg">
+  <img src="docs/diagramas/fixture-karate.svg" alt="Secuencia: el paso Given entrega el perfil a ClienteFixture, que genera el cliente con Datafaker y lo registra con Karate contra la API; si cumple el criterio el escenario continúa con Selenium, si no queda omitido con SkipException.">
+</picture>
 
 - **Karate y Cucumber conviven:** Cucumber ejecuta los features de `src/test/resources/features/` (UI con Selenium) y Karate los de `src/test/resources/karate/` (API). El fixture llama a Karate desde Java con `Runner.runFeature(...)`, le pasa los datos como variables y lee el resultado (`elegible` y `motivo`).
 - **La configuración es una sola:** la URL de la API sale de `env_<ambiente>.json` (Java) y se pasa a Karate; no hay un `karate-config.js` paralelo.
@@ -48,11 +45,26 @@ Resultado: **3 escenarios pasan** (registro por Karate + login por Selenium) y *
 - El feature de Karate **no lleva `@ignore`**: Karate salta los features con esa etiqueta incluso cuando se invocan desde Java.
 - Siguiente paso previsto: agregar la consulta a la base de datos (Supabase) como origen de datos, con un usuario de solo lectura y la credencial en variables de entorno.
 
+## Cómo replicarlo en otro proyecto
+
+Guía para llevar el patrón a un proyecto Selenium + Cucumber + Java existente:
+
+1. **Dependencia de Karate según la versión de Java.** Java 17: `io.karatelabs:karate-core` **1.5.x** · Java 11: **1.4.x** · Karate **2.x exige Java 21**. Se agrega con scope `test`.
+2. **Logging.** Karate trae **Logback**. Si el proyecto ya usa otra implementación de SLF4J (`slf4j-simple`, `log4j-slf4j`, …), quita una de las dos para evitar el aviso de *multiple bindings* y logs duplicados.
+3. **Separar los features.** Los de UI van donde los lee el runner de Cucumber (`features = "classpath:features"`); los de Karate en otra carpeta (aquí `src/test/resources/karate/`). Así Cucumber no intenta ejecutar los de Karate.
+4. **Invocar Karate desde Java.** `Runner.runFeature("classpath:karate/...feature", variables, false)` recibe un `Map` con los datos y devuelve un `Map` con las variables que definió el feature (`* def ...`). El último argumento en `false` evita depender de un `karate-config.js`: la configuración la sigue entregando el framework Java.
+5. **Evaluar el criterio sin cortar la ejecución.** En el feature de Karate, calcula el resultado con `* def elegible = ...` y `* def motivo = ...` en vez de `match`, que lanzaría un error. El fixture decide qué hacer con ese resultado.
+6. **El fixture lo llama un paso, no un hook.** Un `@Before` no conoce los valores de `Examples`; el `Given` sí. El fixture puede inyectarse en los steps por constructor (PicoContainer) junto con el contexto del escenario.
+7. **Omitir vs. fallar.** Si no cumple el criterio, lanza `org.testng.SkipException` (con JUnit 5, `org.opentest4j.TestAbortedException`): Cucumber marca el escenario como omitido. Si Karate no alcanza a evaluar el criterio, lanza un error normal para que el escenario **falle** y no se oculte un problema técnico.
+8. **No uses `@ignore`** en los features que invoca el fixture: Karate los salta incluso desde `Runner.runFeature`.
+9. **Cuidado con los logs.** En `DEBUG`, Karate imprime cada request y response completos. Si viajan datos sensibles (credenciales, RUT, cuentas), deja `com.intuit.karate` en `WARN` o enmascara esos campos.
+10. **Origen de datos real.** Donde aquí está `GeneradorDatos`, va la consulta a la base de datos: idealmente con un **usuario de solo lectura**, sobre una vista con las columnas mínimas, y la credencial en variables de entorno o en el gestor de secretos del CI (nunca en el repositorio).
+
 ---
 
 ## Lo que viene de `main`
 
-## ¿Qué hace esta rama?
+### Escenario base: búsqueda de propiedades
 
 Abre un navegador y hace **exactamente lo que haría un cliente** en el sitio [Guzmán Corretaje](https://guzman-corretaje.vercel.app/), comprobando en cada paso que la página responda como se espera:
 
@@ -107,15 +119,24 @@ flowchart TD
         BUSCA["Buscar el elemento<br/>con espera explícita"]
         HAY{"¿Aparece a tiempo?"}
         ACT["Actuar: clic, seleccionar, leer"]
+        OMIT["Escenario omitido<br/>con el motivo"]
         VAL{"¿La validación<br/>se cumple?"}
         FALLA["Escenario fallido:<br/>captura de pantalla"]
         DESP["Después: cerrar Chrome<br/>y generar el reporte"]
+    end
+    subgraph FX["Fixture · Karate por API"]
+        FIX["Preparar datos:<br/>Datafaker + registro con Karate"]
+        CRIT{"¿Cumple el criterio?"}
     end
     subgraph NAV["Navegador · sitio Guzmán Corretaje"]
         PAG["La página reacciona<br/>y muestra datos"]
     end
     ANTES --> INI
-    PASO --> STEP --> BUSCA --> HAY
+    PASO --> STEP
+    STEP -->|"paso de UI"| BUSCA --> HAY
+    STEP -->|"Given del login"| FIX --> CRIT
+    CRIT -->|sí| MAS
+    CRIT -->|no| OMIT --> DESP
     HAY -->|sí| ACT --> PAG --> VAL
     HAY -->|no| FALLA
     VAL -->|sí| MAS
@@ -128,14 +149,17 @@ flowchart TD
 ```
 
 - **Esperas explícitas:** el framework espera hasta 10 s a que cada elemento aparezca, en lugar de pausas fijas. Así la prueba es rápida cuando el sitio responde rápido y tolera cuando tarda.
+- **El fixture va dentro de un paso:** el `Given` del login llama al fixture con el perfil de la fila de `Examples`. Si no cumple el criterio, los pasos siguientes no se ejecutan y el escenario queda omitido, no fallido.
 - **Despertar la API:** el backend de QA corre en un plan gratuito que se duerme. Antes de abrir el navegador se consulta la API hasta que responda, para que la prueba no falle por eso.
 
 ### 2. Flujo del pipeline (GitHub Actions)
 
+En esta rama el pipeline **no se ejecuta con cada push** (eso solo ocurre en `main`): se lanza abriendo un PR o a mano desde **Actions → Run workflow**, eligiendo la rama `feature/karate-fixtures`.
+
 ```mermaid
 flowchart LR
     subgraph GH["GitHub"]
-        T(("Push a main,<br/>PR o botón<br/>Run workflow"))
+        T(("PR o botón<br/>Run workflow"))
     end
     subgraph VM["Máquina virtual de GitHub Actions"]
         J["Instalar Java 17<br/>y dependencias"] --> M["Ejecutar las pruebas<br/>en Chrome sin pantalla"]
@@ -165,6 +189,7 @@ flowchart LR
    ```bash
    mvn test
    ```
+   El login **registra 3 clientes reales** en el ambiente (usuarios `qa_auto_…`); el cuarto perfil se rechaza a propósito y no crea nada.
 4. **Revisa el resultado** abriendo en el navegador `target/cucumber-reports/cucumber.html`. Cada paso aparece en verde (aprobado) o rojo (fallido), con la captura de pantalla si algo falló.
 
 ### En GitHub, sin instalar nada
@@ -173,12 +198,15 @@ flowchart LR
 
 ### Opciones útiles
 ```bash
-mvn test                              # ambiente qa (por defecto)
-mvn test -Denv=dev                    # localhost (front :3000, API :5000)
-mvn test -Denv=prod                   # producción (aún sin URL: falla con mensaje claro)
-mvn test -Dbrowser.headless=true      # sin abrir ventana del navegador
-mvn test -Dcucumber.filter.tags=@smoke
+mvn test                                    # ambiente qa (por defecto)
+mvn test "-Denv=dev"                        # localhost (front :3000, API :5000)
+mvn test "-Denv=prod"                       # producción (aún sin URL: falla con mensaje claro)
+mvn test "-Dbrowser.headless=true"          # sin abrir ventana del navegador
+mvn test "-Dcucumber.filter.tags=@smoke"    # solo la búsqueda
+mvn test "-Dcucumber.filter.tags=@login"    # solo el login con el fixture de Karate
 ```
+
+> En **PowerShell** los argumentos `-D` con punto van **entre comillas**; sin ellas PowerShell los corta y Maven responde *Unknown lifecycle phase*. En Git Bash o CMD funcionan con o sin comillas.
 
 ## Configuración
 
@@ -220,5 +248,5 @@ src/test/resources/karate/     features de API usados por los fixtures (Karate)
 
 ## Notas
 
-- **Usuarios de prueba:** cada ejecución del login registra 3 clientes reales en el ambiente, con usuario que empieza por `qa_auto_` para identificarlos y limpiarlos desde la base. El backend limita los registros por IP: si se ejecuta muchas veces seguidas puede responder *429 Demasiados intentos*; en ese caso, espera unos minutos.
+- **Usuarios de prueba:** cada ejecución del login registra 3 clientes reales en el ambiente (el perfil "sin consentimiento" se rechaza y no crea nada), con usuario que empieza por `qa_auto_` para identificarlos y limpiarlos desde la base. El backend limita los registros por IP: si se ejecuta muchas veces seguidas puede responder *429 Demasiados intentos*; en ese caso, espera unos minutos.
 - Si tienes un `chromedriver.exe` antiguo en el PATH, Maven lo ignora (`SE_SKIP_DRIVER_IN_PATH=true` en el `pom.xml`). Si ejecutas desde el IDE sin Maven, define esa variable de entorno en la configuración de ejecución.
