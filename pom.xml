@@ -22,7 +22,6 @@
         <cucumber.version>7.34.9</cucumber.version>
         <testng.version>7.12.0</testng.version>
         <jackson.version>2.22.3</jackson.version>
-        <datafaker.version>2.7.0</datafaker.version>
         <assertj.version>3.27.7</assertj.version>
         <slf4j.version>2.0.17</slf4j.version>
 
@@ -41,12 +40,6 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
-        </dependency>
-        <!-- Datos de prueba realistas (nombres, credenciales) para clientes generados en cada escenario -->
-        <dependency>
-            <groupId>net.datafaker</groupId>
-            <artifactId>datafaker</artifactId>
-            <version>${datafaker.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

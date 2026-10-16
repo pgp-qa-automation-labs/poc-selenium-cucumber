@@ -1,7 +1,6 @@
 package cl.guzman.automation.context;
 
 import cl.guzman.automation.driver.DriverManager;
-import cl.guzman.automation.model.Cliente;
 import cl.guzman.automation.model.Propiedad;
 import org.openqa.selenium.WebDriver;
 
@@ -11,7 +10,6 @@ import org.openqa.selenium.WebDriver;
 public class TestContext {
 
     private Propiedad propiedadSeleccionada;
-    private Cliente cliente;
 
     public WebDriver getDriver() {
         return DriverManager.getDriver();
@@ -26,16 +24,5 @@ public class TestContext {
 
     public void setPropiedadSeleccionada(Propiedad propiedadSeleccionada) {
         this.propiedadSeleccionada = propiedadSeleccionada;
-    }
-
-    public Cliente getCliente() {
-        if (cliente == null) {
-            throw new IllegalStateException("No hay un cliente preparado: el escenario debe tener el tag @login");
-        }
-        return cliente;
-    }
-
-    public void setCliente(Cliente cliente) {
-        this.cliente = cliente;
     }
 }
