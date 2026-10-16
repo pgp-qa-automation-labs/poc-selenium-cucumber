@@ -103,6 +103,15 @@ Cada rama agrega un nivel sobre la anterior:
 
 ## Cómo funciona
 
+### Vista general
+
+Qué participa en cada etapa: el perfil de `Examples` entra al fixture, Karate valida los datos contra la API y, según el criterio, Selenium ejecuta el login o el escenario queda omitido. GitHub Actions orquesta la ejecución y los secretos se mantienen fuera del repositorio.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/vista-general-fixture-dark.svg">
+  <img src="docs/diagramas/vista-general-fixture.svg" alt="Vista general: Examples entrega el perfil a ClienteFixture, que genera el cliente con Datafaker; Karate lo registra en la API y evalúa el criterio; si cumple, Selenium hace el login en el sitio y el resultado va al reporte de Cucumber; si no, el escenario queda omitido. GitHub Actions orquesta la ejecución, la base de datos aparece como próximo paso y los secretos quedan fuera del repositorio.">
+</picture>
+
 ### 1. Flujo de la prueba
 
 Cada paso del escenario pasa por el framework, que busca el elemento en la página (esperando a que aparezca), actúa sobre él y valida el resultado.
@@ -120,10 +129,7 @@ Cada paso del escenario pasa por el framework, que busca el elemento en la pági
 
 En esta rama el pipeline **no se ejecuta con cada push** (eso solo ocurre en `main`): se lanza abriendo un PR o a mano desde **Actions → Run workflow**, eligiendo la rama `feature/karate-fixtures`.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/pipeline-fixture-dark.svg">
-  <img src="docs/diagramas/pipeline-fixture.svg" alt="Pipeline: se lanza con un PR o a mano, prepara Java 17, ejecuta Selenium y Karate sin pantalla, sube el reporte y termina en verde o rojo; los escenarios omitidos no cuentan como fallas.">
-</picture>
+El pipeline es la barra superior de la [vista general](#vista-general): prepara Java 17, ejecuta `mvn test` con Chrome sin pantalla y sube el reporte de Cucumber como artefacto. Termina en verde si no hubo fallas; los escenarios omitidos no cuentan como fallas.
 
 ## Paso a paso para usarlo
 
