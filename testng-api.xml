@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Etapa de CI "Pruebas de API": contrato de la API que usan los fixtures (Karate) -->
+<suite name="Guzman Corretaje - Contrato API">
+    <test name="Karate">
+        <classes>
+            <class name="cl.guzman.automation.runners.ContratoApiTest"/>
+        </classes>
+    </test>
+</suite>

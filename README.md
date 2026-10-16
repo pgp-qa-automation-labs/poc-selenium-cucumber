@@ -129,7 +129,21 @@ Cada paso del escenario pasa por el framework, que busca el elemento en la pági
 
 En esta rama el pipeline **no se ejecuta con cada push** (eso solo ocurre en `main`): se lanza abriendo un PR o a mano desde **Actions → Run workflow**, eligiendo la rama `feature/karate-fixtures`.
 
-El pipeline es la barra superior de la [vista general](#vista-general): prepara Java 17, ejecuta `mvn test` con Chrome sin pantalla y sube el reporte de Cucumber como artefacto. Termina en verde si no hubo fallas; los escenarios omitidos no cuentan como fallas.
+El pipeline está dividido en **4 etapas** (jobs). La etapa nueva prueba la API **por sí sola** antes de abrir el navegador. Así se separan dos preguntas que antes aparecían mezcladas: *¿funciona la API que prepara los datos?* y *¿funciona la pantalla con datos válidos?*
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/pipeline-etapas-fixture-dark.svg">
+  <img src="docs/diagramas/pipeline-etapas-fixture.svg" alt="Pipeline en 4 etapas: compilar; pruebas de API con Karate; si la API responde bien se ejecuta la UI con fixtures, si no la UI se omite; el resumen siempre se ejecuta y junta los reportes; termina en verde o rojo y los omitidos no cuentan como fallas.">
+</picture>
+
+| Etapa | Qué hace | Si falla… |
+|---|---|---|
+| **1 · Compilar** | `mvn test-compile` | No se ejecuta nada más |
+| **2 · Pruebas de API (Karate)** | Contrato del registro (`karate/contrato/`): registro válido → 201 con token, sin consentimiento → 400, usuario repetido → rechazado. Sube `karate-report` | **La UI no se ejecuta:** el problema es de la API, no de la pantalla |
+| **3 · UI con fixtures (Selenium)** | Búsqueda y login; cada `Given` prepara sus datos con Karate. Sube `cucumber-report` | Captura de pantalla en el reporte |
+| **4 · Resumen** | Siempre se ejecuta: escribe en la página de la ejecución el resultado de cada etapa, los contratos de la API y los escenarios, con **el motivo de cada omitido** | Marca la ejecución en rojo si alguna etapa falló |
+
+Los escenarios omitidos no cuentan como fallas.
 
 ## Paso a paso para usarlo
 
@@ -144,16 +158,18 @@ El pipeline es la barra superior de la [vista general](#vista-general): prepara 
    ```bash
    mvn test
    ```
-   El login **registra 3 clientes reales** en el ambiente (usuarios `qa_auto_…`); el cuarto perfil se rechaza a propósito y no crea nada.
-4. **Revisa el resultado** abriendo en el navegador `target/cucumber-reports/cucumber.html`. Cada paso aparece en verde (aprobado) o rojo (fallido), con la captura de pantalla si algo falló.
+   Primero corre el contrato de la API (registra 2 clientes) y luego la UI. El login **registra 3 clientes reales** en el ambiente (usuarios `qa_auto_…`); el cuarto perfil se rechaza a propósito y no crea nada.
+4. **Revisa el resultado** abriendo en el navegador `target/cucumber-reports/cucumber.html` (UI) y `target/karate-reports/karate-summary.html` (contrato de la API). Cada paso aparece en verde (aprobado) o rojo (fallido), con la captura de pantalla si algo falló.
 
 ### En GitHub, sin instalar nada
 1. Entra a la pestaña **Actions** → **E2E Selenium Cucumber** → **Run workflow** → **Run workflow**.
-2. Al terminar, abre la ejecución: verás si pasó (✅) o falló (❌) y en **Artifacts** podrás descargar el reporte.
+2. Al terminar, abre la ejecución: verás las 4 etapas, el **resumen** con el resultado de cada una y, en **Artifacts**, los reportes `karate-report` y `cucumber-report`.
 
 ### Opciones útiles
 ```bash
-mvn test                                    # ambiente qa (por defecto)
+mvn test                                    # ambiente qa (por defecto): contrato de la API y luego la UI
+mvn test "-Dsuite=testng-api.xml"           # solo el contrato de la API (Karate)
+mvn test "-Dsuite=testng-ui.xml"            # solo los escenarios de UI (Selenium)
 mvn test "-Denv=dev"                        # localhost (front :3000, API :5000)
 mvn test "-Denv=prod"                       # producción (aún sin URL: falla con mensaje claro)
 mvn test "-Dbrowser.headless=true"          # sin abrir ventana del navegador
@@ -194,14 +210,19 @@ src/test/java/cl/guzman/automation/
 ├── context/       TestContext (estado compartido entre steps, vía PicoContainer)
 ├── fixtures/      ClienteFixture (prepara y valida el cliente con Karate) y PerfilCliente (perfiles de los Examples)
 ├── hooks/         Hooks (despertar API, abrir/cerrar navegador, captura al fallar)
-├── runners/       TestRunner (TestNG)
+├── runners/       TestRunner (Cucumber) y ContratoApiTest (contrato de la API con Karate)
 └── steps/         NavegacionSteps, BusquedaPropiedadSteps, DetallePropiedadSteps, LoginSteps
 
 src/test/resources/features/   escenarios Gherkin de UI (Cucumber + Selenium)
-src/test/resources/karate/     features de API usados por los fixtures (Karate)
+src/test/resources/karate/
+├── clientes/                  feature que usa el fixture (registrar y evaluar el criterio)
+└── contrato/                  contrato de la API, etapa 2 del pipeline
+
+testng.xml · testng-api.xml · testng-ui.xml   suites: todo, solo API, solo UI
+.github/scripts/resumen.py                    resumen de la ejecución (etapa 4)
 ```
 
 ## Notas
 
-- **Usuarios de prueba:** cada ejecución del login registra 3 clientes reales en el ambiente (el perfil "sin consentimiento" se rechaza y no crea nada), con usuario que empieza por `qa_auto_` para identificarlos y limpiarlos desde la base. El backend limita los registros por IP: si se ejecuta muchas veces seguidas puede responder *429 Demasiados intentos*; en ese caso, espera unos minutos.
+- **Usuarios de prueba:** cada ejecución registra 5 clientes reales en el ambiente: 2 del contrato de la API y 3 del login (el perfil "sin consentimiento" se rechaza y no crea nada), con usuario que empieza por `qa_auto_` para identificarlos y limpiarlos desde la base. El backend limita los registros por IP: si se ejecuta muchas veces seguidas puede responder *429 Demasiados intentos*; en ese caso, espera unos minutos.
 - Si tienes un `chromedriver.exe` antiguo en el PATH, Maven lo ignora (`SE_SKIP_DRIVER_IN_PATH=true` en el `pom.xml`). Si ejecutas desde el IDE sin Maven, define esa variable de entorno en la configuración de ejecución.

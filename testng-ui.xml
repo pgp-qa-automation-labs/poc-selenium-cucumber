@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Etapa de CI "UI con fixtures": escenarios de Selenium + Cucumber -->
+<suite name="Guzman Corretaje - UI">
+    <test name="Cucumber">
+        <classes>
+            <class name="cl.guzman.automation.runners.TestRunner"/>
+        </classes>
+    </test>
+</suite>

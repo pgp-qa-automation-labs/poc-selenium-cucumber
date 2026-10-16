@@ -29,6 +29,8 @@
 
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <!-- Suite de TestNG: testng.xml (todo), testng-api.xml o testng-ui.xml. Ej.: mvn test "-Dsuite=testng-api.xml" -->
+        <suite>testng.xml</suite>
     </properties>
 
     <dependencies>
@@ -109,7 +111,7 @@
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
                     <suiteXmlFiles>
-                        <suiteXmlFile>testng.xml</suiteXmlFile>
+                        <suiteXmlFile>${suite}</suiteXmlFile>
                     </suiteXmlFiles>
                     <argLine>-Dfile.encoding=UTF-8</argLine>
                     <environmentVariables>

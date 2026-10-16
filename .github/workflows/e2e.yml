@@ -12,28 +12,98 @@ on:
         options: [qa, prod]
         default: qa
 
+env:
+  AMBIENTE: ${{ inputs.env || 'qa' }}
+
 jobs:
-  e2e:
+  # 1 · Compila el framework y las pruebas; si falla, no se ejecuta nada más
+  compilar:
+    name: 1 · Compilar
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: maven
+      - name: Compilar
+        run: mvn -B test-compile
 
+  # 2 · Prueba por sí sola la API de la que dependen los fixtures (contrato con Karate)
+  api:
+    name: 2 · Pruebas de API (Karate)
+    needs: compilar
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Contrato de la API
+        run: mvn -B test -Dsuite=testng-api.xml -Denv=${{ env.AMBIENTE }}
+      - name: Publicar reporte de Karate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: karate-report
+          path: target/karate-reports/
+          if-no-files-found: ignore
+
+  # 3 · Escenarios de UI; solo se ejecutan si la API cumplió su contrato
+  ui:
+    name: 3 · UI con fixtures (Selenium)
+    needs: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
       # CI=true lo define GitHub Actions: ConfigReader fuerza headless automáticamente
-      - name: Ejecutar pruebas
-        run: mvn -B test -Denv=${{ inputs.env || 'qa' }}
+      - name: Escenarios de UI
+        run: mvn -B test -Dsuite=testng-ui.xml -Denv=${{ env.AMBIENTE }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # se usará en la fase de Self-healing
-
-      - name: Publicar reporte
+      - name: Publicar reporte de Cucumber
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cucumber-report
           path: target/cucumber-reports/
+          if-no-files-found: ignore
+
+  # 4 · Siempre se ejecuta: junta los reportes, escribe el resumen y define verde o rojo
+  resumen:
+    name: 4 · Resumen
+    needs: [compilar, api, ui]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Descargar reportes
+        uses: actions/download-artifact@v4
+        with:
+          path: reportes
+        continue-on-error: true
+      - name: Escribir resumen
+        run: python3 .github/scripts/resumen.py reportes
+        env:
+          RESULTADO_COMPILAR: ${{ needs.compilar.result }}
+          RESULTADO_API: ${{ needs.api.result }}
+          RESULTADO_UI: ${{ needs.ui.result }}
+      - name: Resultado final
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "::error::Al menos una etapa falló: revisa el resumen y los reportes."
+          exit 1

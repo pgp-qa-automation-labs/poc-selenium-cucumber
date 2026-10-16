@@ -1,5 +1,11 @@
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Suite completa (mvn test): contrato de la API y luego la UI. En CI cada parte es una etapa: testng-api.xml y testng-ui.xml -->
 <suite name="Guzman Corretaje E2E">
+    <test name="Karate">
+        <classes>
+            <class name="cl.guzman.automation.runners.ContratoApiTest"/>
+        </classes>
+    </test>
     <test name="Cucumber">
         <classes>
             <class name="cl.guzman.automation.runners.TestRunner"/>
