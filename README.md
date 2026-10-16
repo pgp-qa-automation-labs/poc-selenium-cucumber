@@ -107,46 +107,10 @@ Cada rama agrega un nivel sobre la anterior:
 
 Cada paso del escenario pasa por el framework, que busca el elemento en la página (esperando a que aparezca), actúa sobre él y valida el resultado.
 
-```mermaid
-flowchart TD
-    subgraph CU["Cucumber · escenario .feature"]
-        INI((Inicio)) --> PASO["Tomar el siguiente paso<br/>del escenario"]
-        MAS{"¿Quedan pasos?"}
-    end
-    subgraph FW["Framework · steps y Page Objects"]
-        ANTES["Antes del escenario:<br/>despertar la API y abrir Chrome"]
-        STEP["Ejecutar el step"]
-        BUSCA["Buscar el elemento<br/>con espera explícita"]
-        HAY{"¿Aparece a tiempo?"}
-        ACT["Actuar: clic, seleccionar, leer"]
-        OMIT["Escenario omitido<br/>con el motivo"]
-        VAL{"¿La validación<br/>se cumple?"}
-        FALLA["Escenario fallido:<br/>captura de pantalla"]
-        DESP["Después: cerrar Chrome<br/>y generar el reporte"]
-    end
-    subgraph FX["Fixture · Karate por API"]
-        FIX["Preparar datos:<br/>Datafaker + registro con Karate"]
-        CRIT{"¿Cumple el criterio?"}
-    end
-    subgraph NAV["Navegador · sitio Guzmán Corretaje"]
-        PAG["La página reacciona<br/>y muestra datos"]
-    end
-    ANTES --> INI
-    PASO --> STEP
-    STEP -->|"paso de UI"| BUSCA --> HAY
-    STEP -->|"Given del login"| FIX --> CRIT
-    CRIT -->|sí| MAS
-    CRIT -->|no| OMIT --> DESP
-    HAY -->|sí| ACT --> PAG --> VAL
-    HAY -->|no| FALLA
-    VAL -->|sí| MAS
-    VAL -->|no| FALLA
-    MAS -->|sí| PASO
-    MAS -->|no| OK["Escenario aprobado"]
-    OK --> DESP
-    FALLA --> DESP
-    DESP --> FIN(((Fin)))
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/flujo-prueba-fixture-dark.svg">
+  <img src="docs/diagramas/flujo-prueba-fixture.svg" alt="Flujo: cada paso de UI busca, actúa y valida; el Given del login llama al fixture con Karate; si no cumple el criterio el escenario termina omitido, si un paso falla termina fallido y si no quedan pasos termina aprobado.">
+</picture>
 
 - **Esperas explícitas:** el framework espera hasta 10 s a que cada elemento aparezca, en lugar de pausas fijas. Así la prueba es rápida cuando el sitio responde rápido y tolera cuando tarda.
 - **El fixture va dentro de un paso:** el `Given` del login llama al fixture con el perfil de la fila de `Examples`. Si no cumple el criterio, los pasos siguientes no se ejecutan y el escenario queda omitido, no fallido.
@@ -156,25 +120,10 @@ flowchart TD
 
 En esta rama el pipeline **no se ejecuta con cada push** (eso solo ocurre en `main`): se lanza abriendo un PR o a mano desde **Actions → Run workflow**, eligiendo la rama `feature/karate-fixtures`.
 
-```mermaid
-flowchart LR
-    subgraph GH["GitHub"]
-        T(("PR o botón<br/>Run workflow"))
-    end
-    subgraph VM["Máquina virtual de GitHub Actions"]
-        J["Instalar Java 17<br/>y dependencias"] --> M["Ejecutar las pruebas<br/>en Chrome sin pantalla"]
-        M --> R["Subir el reporte<br/>como artefacto"]
-    end
-    subgraph RES["Resultado"]
-        OK{"¿Pasaron?"}
-        V(((Verde)))
-        X(((Rojo)))
-    end
-    T --> J
-    R --> OK
-    OK -->|sí| V
-    OK -->|no| X
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/pipeline-fixture-dark.svg">
+  <img src="docs/diagramas/pipeline-fixture.svg" alt="Pipeline: se lanza con un PR o a mano, prepara Java 17, ejecuta Selenium y Karate sin pantalla, sube el reporte y termina en verde o rojo; los escenarios omitidos no cuentan como fallas.">
+</picture>
 
 ## Paso a paso para usarlo
 
