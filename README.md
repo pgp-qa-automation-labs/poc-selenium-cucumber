@@ -25,36 +25,23 @@ Esta rama lo resuelve así:
 
 ## Cómo funciona
 
+### Vista general
+
+Cuando un selector deja de encontrar su elemento, el framework envía el HTML visible a Claude, valida el selector que propone y la prueba sigue. Si la reparación fue por un cambio real del sitio, el pipeline abre un PR con la corrección para que una persona lo revise.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/vista-general-self-healing-dark.svg">
+  <img src="docs/diagramas/vista-general-self-healing.svg" alt="Cuando un selector falla, el framework envía el HTML visible a Claude, que propone un selector nuevo; el framework lo valida, la prueba sigue y la reparación queda en el reporte; si fue por un cambio real del sitio, se abre un PR de corrección que revisa una persona.">
+</picture>
+
 ### 1. Flujo de la prueba con self-healing
 
-Cada vez que la prueba necesita un elemento de la página ocurre esto. El camino de la izquierda (el selector funciona) es el normal y **no consulta a la IA**: no tiene costo.
+Cada vez que la prueba necesita un elemento de la página ocurre esto. El camino de arriba (el selector funciona) es el normal y **no consulta a la IA**: no tiene costo.
 
-```mermaid
-flowchart TD
-    subgraph FW["Framework · steps y Page Objects"]
-        INI((Paso del<br/>escenario)) --> BUSCA["Buscar el elemento<br/>con su selector"]
-        BUSCA --> HAY{"¿Aparece a tiempo?"}
-        EXISTE{"¿El selector todavía<br/>encuentra algo visible?"}
-        HTML["Capturar el HTML visible<br/>de la página"]
-        COS{"¿Cosmético y<br/>confianza ≥ 80%?"}
-        VALID{"¿El selector nuevo encuentra<br/>un elemento visible y único?"}
-        USA["Usar el selector nuevo<br/>y registrarlo en el reporte"]
-        ACT["Actuar y validar"]
-        FALLA(((Paso fallido:<br/>error real)))
-        SIGUE(((Sigue la<br/>prueba)))
-    end
-    subgraph IA["Claude · IA"]
-        ANALIZA["Identificar el elemento por su función<br/>y clasificar el cambio"]
-    end
-    HAY -->|sí| ACT --> SIGUE
-    HAY -->|no| EXISTE
-    EXISTE -->|"sí: el problema no es el selector"| FALLA
-    EXISTE -->|no| HTML --> ANALIZA --> COS
-    COS -->|no| FALLA
-    COS -->|sí| VALID
-    VALID -->|no| FALLA
-    VALID -->|sí| USA --> ACT
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/flujo-self-healing-dark.svg">
+  <img src="docs/diagramas/flujo-self-healing.svg" alt="Si el selector no encuentra el elemento, el framework revisa si el problema es el selector, envía el HTML visible a Claude y solo usa el selector nuevo si el cambio es cosmético, la confianza es de al menos 80 % y el elemento es visible y único; si no, el paso falla con el error real.">
+</picture>
 
 Hay **tres filtros** antes de aceptar una reparación, y todos los aplica el framework, no la IA:
 
@@ -79,39 +66,10 @@ Ejemplo real de una reparación: *"El botón BUSCAR sigue presente y visible den
 
 ### 3. Flujo del pipeline y del PR automático
 
-```mermaid
-flowchart TD
-    subgraph GA["GitHub Actions"]
-        T(("Push a main, PR,<br/>Run workflow o diario"))
-        C["1 · Compilar"]
-        PR["3 · Crear PR con el locator<br/>corregido y el reporte"]
-        SINPR(((Sin PR)))
-    end
-    subgraph FW["Framework"]
-        REG["2 · Pruebas de regresión<br/>con self-healing"]
-        DEMO["2 · Demo self-healing<br/>UI simulada, opcional"]
-        REAL{"¿Se reparó algún selector<br/>por un cambio real del sitio?"}
-        PATCH["Corregir el selector<br/>en la Page"]
-    end
-    subgraph IA["Claude · IA"]
-        CONS["Consultas de self-healing<br/>solo si un selector falla"]
-    end
-    subgraph REV["Tú · revisor"]
-        REVISA["Revisar el diff y el reporte"]
-        DEC{"¿El cambio del front<br/>fue intencional?"}
-        MERGE(((Merge)))
-        CIERRA(((Cerrar PR)))
-    end
-    T --> C --> REG
-    C -.-> DEMO
-    REG <--> CONS
-    DEMO <--> CONS
-    REG --> REAL
-    REAL -->|no| SINPR
-    REAL -->|sí| PATCH --> PR --> REVISA --> DEC
-    DEC -->|sí| MERGE
-    DEC -->|no| CIERRA
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/pipeline-self-healing-dark.svg">
+  <img src="docs/diagramas/pipeline-self-healing.svg" alt="Compila, ejecuta la regresión con self-healing y, si se reparó un selector por un cambio real del sitio, abre un PR con la corrección; una persona decide si el cambio del front fue intencional para hacer merge o cerrarlo.">
+</picture>
 
 - **Regresión y demo corren en paralelo** porque son independientes. La demo altera la página a propósito para mostrar el self-healing; por eso está separada, **nunca corrige código** y solo corre si la pides.
 - **El PR nunca se mergea solo:** apunta a la rama donde corrió el pipeline y lo revisa una persona.
