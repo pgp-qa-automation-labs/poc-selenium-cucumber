@@ -39,66 +39,30 @@ Cada rama agrega un nivel sobre la anterior:
 
 ## Cómo funciona
 
+### Vista general
+
+Qué participa en cada etapa: los escenarios de Cucumber usan Page Objects con esperas explícitas para que Selenium recorra el sitio. La configuración define el ambiente, la API se despierta antes de abrir el navegador y GitHub Actions ejecuta todo y publica el reporte.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/vista-general-main-dark.svg">
+  <img src="docs/diagramas/vista-general-main.svg" alt="Los escenarios de Cucumber usan Page Objects con esperas explícitas para que Selenium recorra el sitio en Chrome; la configuración define el ambiente, la API se despierta antes y GitHub Actions ejecuta todo y publica el reporte.">
+</picture>
+
 ### 1. Flujo de la prueba
 
 Cada paso del escenario pasa por el framework, que busca el elemento en la página (esperando a que aparezca), actúa sobre él y valida el resultado.
 
-```mermaid
-flowchart TD
-    subgraph CU["Cucumber · escenario .feature"]
-        INI((Inicio)) --> PASO["Tomar el siguiente paso<br/>del escenario"]
-        MAS{"¿Quedan pasos?"}
-    end
-    subgraph FW["Framework · steps y Page Objects"]
-        ANTES["Antes del escenario:<br/>despertar la API y abrir Chrome"]
-        STEP["Ejecutar el step"]
-        BUSCA["Buscar el elemento<br/>con espera explícita"]
-        HAY{"¿Aparece a tiempo?"}
-        ACT["Actuar: clic, seleccionar, leer"]
-        VAL{"¿La validación<br/>se cumple?"}
-        FALLA["Escenario fallido:<br/>captura de pantalla"]
-        DESP["Después: cerrar Chrome<br/>y generar el reporte"]
-    end
-    subgraph NAV["Navegador · sitio Guzmán Corretaje"]
-        PAG["La página reacciona<br/>y muestra datos"]
-    end
-    ANTES --> INI
-    PASO --> STEP --> BUSCA --> HAY
-    HAY -->|sí| ACT --> PAG --> VAL
-    HAY -->|no| FALLA
-    VAL -->|sí| MAS
-    VAL -->|no| FALLA
-    MAS -->|sí| PASO
-    MAS -->|no| OK["Escenario aprobado"]
-    OK --> DESP
-    FALLA --> DESP
-    DESP --> FIN(((Fin)))
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/flujo-prueba-main-dark.svg">
+  <img src="docs/diagramas/flujo-prueba-main.svg" alt="Cada paso busca su elemento con espera explícita, actúa y valida; si el elemento no aparece o la validación no se cumple, el escenario falla con captura; si no quedan pasos, se aprueba.">
+</picture>
 
 - **Esperas explícitas:** el framework espera hasta 10 s a que cada elemento aparezca, en lugar de pausas fijas. Así la prueba es rápida cuando el sitio responde rápido y tolera cuando tarda.
 - **Despertar la API:** el backend de QA corre en un plan gratuito que se duerme. Antes de abrir el navegador se consulta la API hasta que responda, para que la prueba no falle por eso.
 
 ### 2. Flujo del pipeline (GitHub Actions)
 
-```mermaid
-flowchart LR
-    subgraph GH["GitHub"]
-        T(("Push a main,<br/>PR o botón<br/>Run workflow"))
-    end
-    subgraph VM["Máquina virtual de GitHub Actions"]
-        J["Instalar Java 17<br/>y dependencias"] --> M["Ejecutar las pruebas<br/>en Chrome sin pantalla"]
-        M --> R["Subir el reporte<br/>como artefacto"]
-    end
-    subgraph RES["Resultado"]
-        OK{"¿Pasaron?"}
-        V(((Verde)))
-        X(((Rojo)))
-    end
-    T --> J
-    R --> OK
-    OK -->|sí| V
-    OK -->|no| X
-```
+El pipeline es la barra superior de la [vista general](#vista-general): se lanza con un push a `main`, con un PR o a mano desde **Actions → Run workflow**; prepara Java 17, ejecuta `mvn test` con Chrome sin pantalla y sube el reporte de Cucumber como artefacto. Termina en verde si todas las pruebas pasan y en rojo si alguna falla.
 
 ## Paso a paso para usarlo
 
