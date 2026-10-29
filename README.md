@@ -37,43 +37,21 @@ No son un servicio aparte: son **código Java dentro de esta rama** que llama a 
 
 ## Cómo funciona
 
+### Vista general
+
+Cuando un escenario falla, el framework guarda la evidencia y el agente de triage la investiga con Claude y sus herramientas. El diagnóstico queda siempre en el resumen y, si la confianza es de al menos 60 %, se crea el issue en el gestor elegido.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/vista-general-agentes-dark.svg">
+  <img src="docs/diagramas/vista-general-agentes.svg" alt="Cuando un escenario falla, el framework guarda su evidencia y la compara con la última ejecución exitosa; el agente de triage la investiga con Claude y sus herramientas, registra un diagnóstico en el resumen y, si la confianza es de al menos 60 %, crea el issue en GitHub, Jira o Azure DevOps.">
+</picture>
+
 ### 1. Flujo de la prueba
 
-```mermaid
-flowchart TD
-    subgraph FW["Framework · Cucumber, steps y Page Objects"]
-        INI((Inicio)) --> ANTES["Despertar la API<br/>y abrir Chrome"]
-        ANTES --> PASO["Ejecutar el siguiente paso"]
-        SEL{"¿El elemento<br/>aparece?"}
-        VAL{"¿La validación<br/>se cumple?"}
-        MAS{"¿Quedan pasos?"}
-        OK["Escenario aprobado:<br/>guardar línea base"]
-        FALLA["Escenario fallido:<br/>captura de pantalla"]
-        REIN{"¿Es el primer<br/>intento?"}
-        PASA{"¿Pasó en<br/>el reintento?"}
-        INEST(((Inestable:<br/>se informa)))
-        EVI(((Fallido: guardar evidencia<br/>+ línea base previa)))
-        FIN(((Aprobado)))
-    end
-    subgraph SH["Self-healing · IA"]
-        REP{"¿La IA lo repara?<br/>cosmético, confianza ≥ 80%,<br/>visible y único"}
-    end
-    PASO --> SEL
-    SEL -->|sí| VAL
-    SEL -->|no| REP
-    REP -->|sí| VAL
-    REP -->|no| FALLA
-    VAL -->|sí| MAS
-    VAL -->|no| FALLA
-    MAS -->|sí| PASO
-    MAS -->|no| OK
-    OK --> PASA
-    PASA -->|"sí, venía de un fallo"| INEST
-    PASA -->|"no hubo fallo"| FIN
-    FALLA --> REIN
-    REIN -->|"sí: reintentar"| ANTES
-    REIN -->|"no: falló dos veces"| EVI
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/flujo-prueba-agentes-dark.svg">
+  <img src="docs/diagramas/flujo-prueba-agentes.svg" alt="Cada escenario se ejecuta con self-healing; si pasa, guarda su línea base; si falla, guarda la evidencia y se reintenta una vez; si vuelve a fallar, queda fallido y pasa al agente de triage, y si pasa en el reintento se informa como inestable.">
+</picture>
 
 - **Si todo funciona, no se consulta a la IA**, así que no hay costo.
 - **El self-healing actúa durante la prueba** para que un cambio cosmético no la detenga.
@@ -85,30 +63,10 @@ flowchart TD
 
 A diferencia del self-healing (una pregunta y una respuesta), el agente **decide por su cuenta** qué revisar, en varias vueltas (máximo 8), hasta tener evidencia suficiente.
 
-```mermaid
-flowchart LR
-    subgraph EV["Evaluación de triage"]
-        LISTA["Leer la evidencia<br/>de los fallidos"]
-        GRUPO["Agrupar los fallos<br/>con la misma causa"]
-        TOPE{"¿Dentro del tope<br/>de investigaciones?"}
-        SKIP(((No investigado:<br/>se informa)))
-        ADJ(((Diagnóstico +<br/>captura)))
-    end
-    subgraph AG["Agente · Claude"]
-        ANA["Analizar la evidencia"]
-        FALTA{"¿Falta evidencia?"}
-        DIAG["Registrar el diagnóstico"]
-    end
-    subgraph HE["Herramientas · solo lectura"]
-        TOOL["HTML, consola o red guardados,<br/>diferencias con la línea base<br/>o API ahora"]
-    end
-    LISTA --> GRUPO --> TOPE
-    TOPE -->|no| SKIP
-    TOPE -->|sí| ANA --> FALTA
-    FALTA -->|sí| TOOL
-    TOOL -->|resultado| ANA
-    FALTA -->|no| DIAG --> ADJ
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/triage-agente-dark.svg">
+  <img src="docs/diagramas/triage-agente.svg" alt="Los fallos se agrupan por causa; dentro del tope, Claude analiza la evidencia y pide herramientas de solo lectura mientras le falte evidencia, hasta registrar un diagnóstico con categoría y confianza.">
+</picture>
 
 **Agrupación sin IA:** dos fallos van al mismo grupo si el navegador tuvo **las mismas llamadas a la API con error** (por ejemplo, `/api/properties → 503`), o si fallaron **en el mismo paso con el mismo error**. Si el sitio se cae y fallan 20 escenarios, el agente investiga **uno** y el issue lista los 20.
 
@@ -147,30 +105,10 @@ En el log del pipeline, cada investigación es una sección plegable con cada he
 
 ### 3. Cómo se publican los issues
 
-```mermaid
-flowchart TD
-    subgraph FW["Framework · publicación"]
-        INI((Diagnósticos<br/>del triage)) --> CONF{"¿Confianza ≥ 60%<br/>y no indeterminado?"}
-        OMIT(((Omitir)))
-        DRY{"¿Dry-run?<br/>local, PR o destino ninguno"}
-        PREV["Guardar la vista previa:<br/>payload exacto + resumen"]
-        CRED{"¿El gestor tiene<br/>credenciales?"}
-    end
-    subgraph GE["Gestor elegido · GitHub, Jira o Azure DevOps"]
-        BUS["Buscar un issue abierto<br/>con la misma huella"]
-        EX{"¿Ya existe?"}
-        COM(((Comentar:<br/>fallo repetido)))
-        NUEVO(((Crear issue<br/>con la captura)))
-    end
-    CONF -->|no| OMIT
-    CONF -->|sí| DRY
-    DRY -->|sí| PREV
-    DRY -->|no| CRED
-    CRED -->|no| PREV
-    CRED -->|sí| BUS --> EX
-    EX -->|sí| COM
-    EX -->|no| NUEVO
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/issues-publicacion-dark.svg">
+  <img src="docs/diagramas/issues-publicacion.svg" alt="Solo los diagnósticos con confianza de al menos 60 % se publican; en dry-run o sin credenciales se guarda una vista previa; si ya existe un issue con la misma huella se comenta, si no se crea con la captura.">
+</picture>
 
 - **Huella:** se calcula a partir de la evidencia del grupo (la llamada que falló, o el paso y el error), **no de la clasificación de la IA**. Así, aunque el agente clasifique el mismo fallo de forma distinta otro día, se comenta el issue existente en vez de abrir otro.
 - **La captura en cada gestor:** **Jira** y **Azure DevOps** la reciben como **archivo adjunto**. La API de issues de **GitHub** no acepta adjuntos: la captura se publica en la rama `triage-evidencias` y se muestra **dentro del issue** como imagen (ver [Rama de evidencias](#rama-de-evidencias)).
@@ -178,27 +116,10 @@ flowchart TD
 
 ### 4. Flujo del pipeline (GitHub Actions)
 
-```mermaid
-flowchart TD
-    C["1 · Compilar"]
-    REG["2 · Pruebas de regresión<br/>self-healing, reintento, evidencia<br/>y línea base"]
-    DEMO["2 · Demo self-healing<br/>opcional"]
-    PR["3 · PR de corrección<br/>si hubo una reparación real"]
-    TRI["3 · Evaluación de triage<br/>si hubo fallos: agrupa, tope, agente"]
-    GH["4 · Issue en GitHub"]
-    JI["4 · Issue en Jira"]
-    AZ["4 · Issue en Azure DevOps"]
-    TAR["4 · Tarea en Jira o Azure DevOps<br/>si se eligió"]
-    REV(((Tú: revisar<br/>y aprobar el PR)))
-    C --> REG
-    C -.-> DEMO
-    REG --> PR --> REV
-    PR --> TAR
-    REG --> TRI
-    TRI -->|"si se eligió"| GH
-    TRI -->|"si se eligió"| JI
-    TRI -->|"si se eligió"| AZ
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/pipeline-agentes-dark.svg">
+  <img src="docs/diagramas/pipeline-agentes.svg" alt="Compila y ejecuta la regresión; si hubo fallos, el triage los investiga y crea los issues en el destino elegido; si hubo una reparación real, abre un PR de corrección que revisa una persona.">
+</picture>
 
 | Etapa | Cuándo corre | Usa IA | Puede escribir |
 |---|---|---|---|
