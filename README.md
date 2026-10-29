@@ -13,27 +13,10 @@ Para mostrar, en un caso real y reproducible, el ciclo completo del self-healing
 
 ## Flujo de la demo
 
-```mermaid
-flowchart TD
-    subgraph TU["Tú"]
-        RUN(("Run workflow sobre<br/>demo/locator-obsoleto"))
-        REV["Revisar el PR:<br/>diff y razonamiento de la IA"]
-        CIERRA(((Cerrar el PR<br/>sin mergear)))
-    end
-    subgraph GA["GitHub Actions"]
-        PRUEBA["Pruebas de regresión"]
-        PR["Abrir PR hacia<br/>demo/locator-obsoleto"]
-    end
-    subgraph FW["Framework"]
-        FALLA["El selector obsoleto<br/>no encuentra el botón"]
-        PATCH["Corregir el selector<br/>en HomePage.java"]
-    end
-    subgraph IA["Claude"]
-        REPARA["Identificar el botón real:<br/>cambio cosmético"]
-    end
-    RUN --> PRUEBA --> FALLA --> REPARA
-    REPARA -->|"la prueba continúa y pasa"| PATCH --> PR --> REV --> CIERRA
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/flujo-demo-dark.svg">
+  <img src="docs/diagramas/flujo-demo.svg" alt="Al ejecutar el workflow, el selector obsoleto no encuentra el botón, Claude lo identifica como un cambio cosmético y la prueba pasa; el framework corrige el selector en HomePage.java y abre un PR, que se revisa y se cierra sin merge.">
+</picture>
 
 ## Paso a paso
 
