@@ -27,11 +27,11 @@ Esta rama lo resuelve así:
 
 ### Vista general
 
-Cuando un selector deja de encontrar su elemento, el framework envía el HTML visible a Claude, valida el selector que propone y la prueba sigue. Si la reparación fue por un cambio real del sitio, el pipeline abre un PR con la corrección para que una persona lo revise.
+Cuando un selector deja de encontrar su elemento, el framework envía el HTML reducido de la página a Claude, valida el selector que propone y la prueba sigue. Si la reparación fue por un cambio real del sitio, el pipeline abre un PR con la corrección para que una persona lo revise.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagramas/vista-general-self-healing-dark.svg">
-  <img src="docs/diagramas/vista-general-self-healing.svg" alt="Cuando un selector falla, el framework envía el HTML visible a Claude, que propone un selector nuevo; el framework lo valida, la prueba sigue y la reparación queda en el reporte; si fue por un cambio real del sitio, se abre un PR de corrección que revisa una persona.">
+  <img src="docs/diagramas/vista-general-self-healing.svg" alt="Cuando un selector falla, el framework envía el HTML reducido de la página a Claude, que propone un selector nuevo; el framework lo valida, la prueba sigue y la reparación queda en el reporte; si fue por un cambio real del sitio, se abre un PR de corrección que revisa una persona.">
 </picture>
 
 ### 1. Flujo de la prueba con self-healing
